@@ -34,7 +34,9 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ vars.DOCKER_USERNAME }}/loxinflux:${{ github.sha }}
+            ${{ vars.DOCKER_USERNAME }}/loxinflux:latest
           annotations: ${{ steps.meta.outputs.annotations }}
           provenance: true
           sbom: true
