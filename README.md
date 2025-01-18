@@ -41,7 +41,7 @@ docker run -d \
   -v $(pwd)/config:/app/config \
   -v $(pwd)/data:/app/data \
   --restart unless-stopped \
-  jakobgliwa/loxinflux:latest
+  acidcliff/loxinflux:latest
 ```
 
 ## Features
@@ -86,7 +86,7 @@ Each metric includes:
 
 The Docker image is available on Docker Hub:
 ```bash
-docker pull jakobgliwa/loxinflux:latest
+docker pull acidcliff/loxinflux:latest
 ```
 
 For installation:
@@ -105,7 +105,7 @@ docker run -d \
   -v $(pwd)/config:/app/config \
   -v $(pwd)/data:/app/data \
   --restart unless-stopped \
-  jakobgliwa/loxinflux:latest
+  acidcliff/loxinflux:latest
 ```
 
 Note: Port mappings (-p flags) are only needed if you're using TCP/UDP protocols and Telegraf is running on a different host.
