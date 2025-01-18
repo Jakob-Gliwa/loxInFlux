@@ -1,6 +1,7 @@
 # LoxInFlux
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+![Docker Pulls](https://img.shields.io/docker/pulls/acidcliff/loxinflux)
 
 > ⚠️ This project is in no way affiliated with Loxone, software, company or its developers.
 
