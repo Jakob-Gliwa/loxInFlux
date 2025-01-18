@@ -19,7 +19,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ vars.DOCKER_USERNAME }}/my-image
+          images: ${{ vars.DOCKER_USERNAME }}/loxinflux
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
