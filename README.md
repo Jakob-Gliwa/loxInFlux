@@ -278,7 +278,7 @@ This project was inspired by and builds upon the work of several other projects:
 - [Alladdin](https://github.com/Alladdin): For his Loxone related reference implementation and research
 - [Node-Red-Contrib-Loxone](https://github.com/codmpm/node-red-contrib-loxone): For the Node-Red Loxone plugin, which made testing much easier and provided valueable insights in handling the websocket communication
 - [Loxone](https://www.loxone.com/enen/kb/api/): For building such a great home automation ecosystem and providing the openness to build upon it
-- [Stats4Lox (NG)](https://github.com/mschlenstedt/Stats4Lox): For the original idea of a plugin that collects data from the Miniserver and forwards it to Telegraf
+- [Stats4Lox (NG)](https://github.com/mschlenstedt/LoxBerry-Plugin-Stats4Lox-NG): For the original idea of a plugin that collects data from the Miniserver and forwards it to Telegraf
 
 ## Contributing
 
