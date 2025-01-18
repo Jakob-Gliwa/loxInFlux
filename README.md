@@ -1,7 +1,6 @@
 # LoxInFlux
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-![Release](https://img.shields.io/github/v/release/Jakob-Gliwa/loxinflux)
 
 > ⚠️ This project is in no way affiliated with Loxone, software, company or its developers.
 
