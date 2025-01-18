@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "loxInFlux"
+version = "0.1.0"
+description = "Loxone to InfluxDB Bridge"
+authors = [
+    { name = "Jakob Gliwa", email = "your.email@example.com" }
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pycryptodome>=3.21.0",
+    "lxml>=4.9.0",
+    "influxdb-client>=1.48.0",
+    "aioftp>=0.24.1",
+    "aiofiles>=24.1.0",
+    "orjson>=3.10.13",
+    "uvloop>=0.21.0",
+    "aiohttp>=3.11.11",
+    "tomli>=2.2.1",
+    "gmqtt>=0.7.0",
+    "construct>=2.10.70",
+    "Cython>=3.0.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+]
+
+[project.scripts]
+loxInFlux = "loxInFlux.app:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]   
+
+[tool.uv]
+native-tls = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/loxInFlux", "src/loxwebsocket"]
