@@ -25,6 +25,12 @@ _loxapp3_cache_json_last_modified = None
 valueplaceholder = b'[valueplaceholder]'
 sourceplaceholder = b'[sourceplaceholder]'
 
+# Blacklist for controls that are not capable of being used in the grabber as their API is not consistent with the other controls.
+# Currently I'm just aware of the VIRTUALTEXTIN control, but there might be more.
+# When VIRTUALTEXTIN is polled by the grabber, the /all command is set as its text value.
+# I don't know wether there is a way to get the current value of the control.
+SYS_BLACKLIST = ["VIRTUALTEXTIN"]
+
 def remove_bom(xmlstr: str) -> str:
     BOM = "\ufeff"
     return xmlstr[len(BOM):] if xmlstr.startswith(BOM) else xmlstr
@@ -141,6 +147,8 @@ def extractControls(root, lox_category_room: dict) -> tuple[dict, dict, dict]:
         }
         if visu:
             visu_controls[uid] = controls[uid]
+        elif objtype.upper() in SYS_BLACKLIST:
+            logger.warning(f"Skipping {objtype} with id {uid} because it is not capable of being used in the grabber")
         else:
             non_visu_controls[uid] = controls[uid]
 
@@ -162,7 +170,8 @@ def extractControls(root, lox_category_room: dict) -> tuple[dict, dict, dict]:
             }
             if visu: 
                 visu_controls[co_uid] = controls[co_uid]
-            # Grabber needs only parent uuid
+        
+        # Grabber needs only parent uuid
         for uid in linkCofVisuControll:
             if uid in non_visu_controls:
                 visu_controls[uid] = non_visu_controls[uid]
