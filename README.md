@@ -1,7 +1,7 @@
 # LoxInFlux
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-![Release](https://img.shields.io/github/v/release/Jakob-Gliwa/loxinflux)
+![Docker Pulls](https://img.shields.io/docker/pulls/acidcliff/loxinflux)
 
 > ⚠️ This project is in no way affiliated with Loxone, software, company or its developers.
 
@@ -41,7 +41,7 @@ docker run -d \
   -v $(pwd)/config:/app/config \
   -v $(pwd)/data:/app/data \
   --restart unless-stopped \
-  jakobgliwa/loxinflux:latest
+  acidcliff/loxinflux:latest
 ```
 
 ## Features
@@ -86,7 +86,7 @@ Each metric includes:
 
 The Docker image is available on Docker Hub:
 ```bash
-docker pull jakobgliwa/loxinflux:latest
+docker pull acidcliff/loxinflux:latest
 ```
 
 For installation:
@@ -105,7 +105,7 @@ docker run -d \
   -v $(pwd)/config:/app/config \
   -v $(pwd)/data:/app/data \
   --restart unless-stopped \
-  jakobgliwa/loxinflux:latest
+  acidcliff/loxinflux:latest
 ```
 
 Note: Port mappings (-p flags) are only needed if you're using TCP/UDP protocols and Telegraf is running on a different host.
@@ -279,7 +279,7 @@ This project was inspired by and builds upon the work of several other projects:
 - [Alladdin](https://github.com/Alladdin): For his Loxone related reference implementation and research
 - [Node-Red-Contrib-Loxone](https://github.com/codmpm/node-red-contrib-loxone): For the Node-Red Loxone plugin, which made testing much easier and provided valueable insights in handling the websocket communication
 - [Loxone](https://www.loxone.com/enen/kb/api/): For building such a great home automation ecosystem and providing the openness to build upon it
-- [Stats4Lox (NG)](https://github.com/mschlenstedt/Stats4Lox): For the original idea of a plugin that collects data from the Miniserver and forwards it to Telegraf
+- [Stats4Lox (NG)](https://github.com/mschlenstedt/LoxBerry-Plugin-Stats4Lox-NG): For the original idea of a plugin that collects data from the Miniserver and forwards it to Telegraf
 
 ## Contributing
 
