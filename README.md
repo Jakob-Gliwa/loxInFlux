@@ -116,6 +116,7 @@ Note: Port mappings (-p flags) are only needed if you're using TCP/UDP protocols
 ### Using uv (Alternative)
 
 Project is built with uv, so you can install it with uv.
+As one core component of LoxInFlux is written in C(ython), you need to make sure to have a C compiler installed (e.g. gcc).
 
 Requirements:
 - Python 3.13 or higher
@@ -125,6 +126,8 @@ To build clone the repo and run in the root folder:
 uv venv .venv
 source .venv/bin/activate
 uv pip install .
+cd src/loxwebsocket/cython_modules
+python setup.py build_ext --inplace
 uv run loxInFlux
 ```
 
