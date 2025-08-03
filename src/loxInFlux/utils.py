@@ -116,7 +116,13 @@ def initialize_logging():
 
 def _build_base_url():
         protocol = "https" if config.miniserver.port == 443 else "http"
-        return f"{protocol}://{config.miniserver.host}"
+        
+        # Include port in URL if it's not the default port for the protocol
+        if (protocol == "http" and config.miniserver.port != 80) or \
+           (protocol == "https" and config.miniserver.port != 443):
+            return f"{protocol}://{config.miniserver.host}:{config.miniserver.port}"
+        else:
+            return f"{protocol}://{config.miniserver.host}"
 
 def log_performance(name: Optional[str] = None, severity: Optional[int] = logging.DEBUG):
     """

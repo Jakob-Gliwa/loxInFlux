@@ -205,7 +205,19 @@ def getControlsFromConfigXML(xmlstr: str):
     xmlstr = remove_bom(xmlstr)
     xmlstr = correctXML_removeAttributeDuplicates(xmlstr, "(LoxAIR|LoxAIRDevice|User)")
     
-    root = ET.fromstring(xmlstr.encode('utf-8'))
+    try:    
+        root = ET.fromstring(xmlstr.encode('utf-8'))
+        logger.debug(f"XML parsed successfully")
+    except ET.XMLSyntaxError as e:
+        logger.warning(f"Standard XML parsing failed: {str(e)}")
+        logger.warning("Attempting XML parsing with recovery mode for malformed XML")
+        
+        # Use lxml recovery mode for malformed XML (handles duplicate attributes, encoding issues, etc.)
+        parser = ET.XMLParser(recover=True)
+        root = ET.fromstring(xmlstr.encode('utf-8'), parser)
+        logger.warning("Successfully parsed malformed XML using lxml recovery mode")
+
+    
     lox_category_room = extractRoomsAndCategories(root)
     
     return extractControls(root, lox_category_room)
