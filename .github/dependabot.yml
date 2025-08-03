@@ -1,0 +1,21 @@
+version: 2
+updates:
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "friday"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "Jakob-Gliwa"
+    assignees:
+      - "Jakob-Gliwa"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    # Optional: Group ALL dependencies together to reduce PR noise
+    groups:
+      python-dependencies:
+        patterns:
+          - "*"
