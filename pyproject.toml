@@ -23,7 +23,6 @@ dependencies = [
     "tomli>=2.2.1",
     "gmqtt>=0.7.0",
     "construct>=2.10.70",
-    "Cython>=3.0.0",
     "loxwebsocket>=0.5.0"
 ]
 
@@ -45,4 +44,4 @@ testpaths = ["tests"]
 native-tls = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/loxInFlux", "src/loxwebsocket"]
+packages = ["src/loxInFlux"]
