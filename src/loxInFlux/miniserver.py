@@ -85,6 +85,7 @@ def extractControls(root, lox_category_room: dict) -> tuple[dict, dict, dict]:
         catname = ""
         rmname = ""
         visu = ""
+        visuPwd = ""
         iodata = obj.find("IoData")
         if iodata is not None:
             cr = iodata.get("Cr")
@@ -96,7 +97,11 @@ def extractControls(root, lox_category_room: dict) -> tuple[dict, dict, dict]:
             visu = iodata.get("Visu", "")
             visuPwd = iodata.get("VisuPwd", "")
 
-        if visu and obj.get("linkC"):
+        # Normalize flags to real booleans (avoid truthiness of non-empty strings like "false")
+        is_visu_control = str(visu).strip().lower() in ("1", "true", "yes")
+        is_visu_pwd_required = str(visuPwd).strip().lower() in ("1", "true", "yes")
+
+        if is_visu_control and obj.get("linkC"):
             linkCofVisuControll.update(e.encode('utf-8') for e in obj.get("linkC").split(","))
 
         # Display-Tag -> Unit
@@ -142,10 +147,10 @@ def extractControls(root, lox_category_room: dict) -> tuple[dict, dict, dict]:
             "point_websocket": point.replace(b"[sourceplaceholder]", b"websocket").replace(b"[valueplaceholder]", b"")[:-2],
             "pointInflux": deepcopy(base_point).field("Default", "[valueplaceholder]"),
             "type": objtype.upper(),
-            "visu": bool(visu),
-            "VisuPwd": bool(visuPwd),
+            "visu": is_visu_control,
+            "VisuPwd": is_visu_pwd_required,
         }
-        if visu:
+        if is_visu_control:
             visu_controls[uid] = controls[uid]
         elif objtype.upper() in SYS_BLACKLIST:
             logger.warning(f"Skipping {objtype} with id {uid} because it is not capable of being used in the grabber")
@@ -168,7 +173,7 @@ def extractControls(root, lox_category_room: dict) -> tuple[dict, dict, dict]:
                 "type": objtype.upper(),
                 "parent_uuid": uid,
             }
-            if visu: 
+            if is_visu_control: 
                 visu_controls[co_uid] = controls[co_uid]
         
         # Grabber needs only parent uuid
