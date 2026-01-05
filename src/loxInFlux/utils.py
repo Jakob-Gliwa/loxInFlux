@@ -3,7 +3,7 @@ import functools
 import logging
 import time
 import orjson as json
-from typing import Callable, TypeVar, ParamSpec
+from typing import Callable, TypeVar, ParamSpec, Optional
 
 import aiohttp
 import asyncio
