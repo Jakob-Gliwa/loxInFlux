@@ -3,11 +3,12 @@ import asyncio
 import logging
 from typing import Optional
 from .config import config
+from .logger import get_lazy_logger
 import sys
 from gmqtt import Client as MQTTClient
 from gmqtt import constants as MQTTconstants
 
-logger = logging.getLogger(__name__)
+logger = get_lazy_logger(__name__)
 
 class TelegrafWriter(abc.ABC):
     """Abstract base class for Telegraf writers."""
@@ -65,9 +66,9 @@ class UDPTelegrafWriter(TelegrafWriter):
                 remote_addr=(self.host, self.port)
             )
             self.transport = transport
-            logger.info(f"Created UDP endpoint for Telegraf at {self.host}:{self.port}")
+            logger.info("Created UDP endpoint for Telegraf at %s:%d", self.host, self.port)
         except Exception as e:
-            logger.error(f"Failed to create UDP endpoint for Telegraf: {e}")
+            logger.error("Failed to create UDP endpoint for Telegraf: %s", e)
             raise
 
     async def close(self) -> None:
@@ -77,14 +78,14 @@ class UDPTelegrafWriter(TelegrafWriter):
                 self.transport.close()
                 logger.info("Closed UDP connection to Telegraf")
             except Exception as e:
-                logger.error(f"Error closing Telegraf connection: {e}")
+                logger.error("Error closing Telegraf connection: %s", e)
         self._initialized = False
         
     async def write(self, point: bytes) -> None:
         try:
             self.transport.sendto(point)
         except Exception as e:
-            logger.error(f"Failed to write to Telegraf: {e}")
+            logger.error("Failed to write to Telegraf: %s", e)
             # Try to reconnect
             await self.close()
             await self.initialize()
@@ -111,10 +112,10 @@ class TCPTelegrafWriter(TelegrafWriter):
         for attempt in range(1,self.max_retries):
             try:
                 self.reader, self.writer = await asyncio.open_connection(self.host, self.port)
-                logger.info(f"Created TCP connection to Telegraf at {self.host}:{self.port}")
+                logger.info("Created TCP connection to Telegraf at %s:%d", self.host, self.port)
                 return
             except Exception as e:
-                logger.error(f"Failed to create TCP connection to Telegraf: {e}")
+                logger.error("Failed to create TCP connection to Telegraf: %s", e)
                 if self.max_retries > 0 and attempt > self.max_retries:
                     raise
                 await asyncio.sleep(1)
@@ -127,7 +128,7 @@ class TCPTelegrafWriter(TelegrafWriter):
                 await self.writer.wait_closed()
                 logger.info("Closed TCP connection to Telegraf")
             except Exception as e:
-                logger.error(f"Error closing Telegraf connection: {e}")
+                logger.error("Error closing Telegraf connection: %s", e)
         self._initialized = False
         
     async def write(self, point: bytes) -> None:
@@ -144,7 +145,7 @@ class TCPTelegrafWriter(TelegrafWriter):
                 self.writer.write(point)
                 await self.writer.drain()
             except Exception as e:
-                logger.error(f"Failed to write to Telegraf: {e}")
+                logger.error("Failed to write to Telegraf: %s", e)
                 # Try to reconnect
                 await self.close()
                 await self.initialize()
@@ -193,7 +194,7 @@ class ExecDTelegrafWriter(TelegrafWriter):
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error in periodic flush: {e}")
+                logger.error("Error in periodic flush: %s", e)
 
     async def _flush_buffer(self):
         """Flush the current buffer to stdout."""
@@ -205,7 +206,7 @@ class ExecDTelegrafWriter(TelegrafWriter):
             sys.stdout.flush()
             self._buffer.clear()
         except Exception as e:
-            logger.error(f"Failed to flush buffer to stdout: {e}")
+            logger.error("Failed to flush buffer to stdout: %s", e)
     
     async def write(self, point: bytes) -> None:
         """Write a point to the buffer.
@@ -218,7 +219,7 @@ class ExecDTelegrafWriter(TelegrafWriter):
                 sys.stdout.buffer.write(point + b'\n')
                 sys.stdout.flush()
             except Exception as e:
-                logger.error(f"Failed to write to buffer: {e}")
+                logger.error("Failed to write to buffer: %s", e)
 
 class MQTTTelegrafWriter(TelegrafWriter):
     """Writer that publishes metrics to MQTT broker using gmqtt."""
@@ -255,9 +256,9 @@ class MQTTTelegrafWriter(TelegrafWriter):
                 keepalive=60,
                 version=MQTTconstants.MQTTv311 # MQTTv3.1.1 for performacne reasons - no need for v5
             )
-            logger.info(f"Connected to MQTT broker at {self.mqtt_config.host}:{self.mqtt_config.port}")
+            logger.info("Connected to MQTT broker at %s:%d", self.mqtt_config.host, self.mqtt_config.port)
         except Exception as e:
-            logger.error(f"Failed to connect to MQTT broker: {e}")
+            logger.error("Failed to connect to MQTT broker: %s", e)
             raise
 
     async def close(self) -> None:
@@ -267,7 +268,7 @@ class MQTTTelegrafWriter(TelegrafWriter):
                 await self.client.disconnect()
                 logger.info("Disconnected from MQTT broker")
             except Exception as e:
-                logger.error(f"Error disconnecting from MQTT broker: {e}")
+                logger.error("Error disconnecting from MQTT broker: %s", e)
         self._initialized = False
         
     async def write(self, point: bytes) -> None:
@@ -283,7 +284,7 @@ class MQTTTelegrafWriter(TelegrafWriter):
             try:
                 self.client.publish(self.mqtt_config.topic, point, qos=0)
             except Exception as e:
-                logger.error(f"Failed to publish to MQTT: {e}")
+                logger.error("Failed to publish to MQTT: %s", e)
                 # Try to reconnect
                 await self.close()
                 await self.initialize()
@@ -294,7 +295,7 @@ class MQTTTelegrafWriter(TelegrafWriter):
     def _on_disconnect(client, packet, exc=None):
         logger.info("MQTT disconnected")
         if exc:
-            logger.error(f"Disconnect error: {exc}")
+            logger.error("Disconnect error: %s", exc)
 
 def create_telegraf_writer() -> TelegrafWriter:
     """Factory function to create the appropriate TelegrafWriter based on config."""

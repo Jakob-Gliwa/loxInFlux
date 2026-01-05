@@ -3,8 +3,9 @@ import logging
 from loxwebsocket.lox_ws_api import loxwebsocket
 from typing import Callable
 from .config import config
+from .logger import get_lazy_logger
 
-logger = logging.getLogger(__name__)
+logger = get_lazy_logger(__name__)
 
 class LoxoneGrabber:
     def __init__(self):

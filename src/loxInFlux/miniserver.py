@@ -13,6 +13,7 @@ from influxdb_client import Point
 from lxml import etree as ET
 from loxInFlux.utils import log_performance, get_loxapp3_json_last_modified
 from loxInFlux.config import config
+from loxInFlux.logger import get_lazy_logger
 import aioftp  
 import aiofiles  
 import orjson  
@@ -22,7 +23,7 @@ from copy import deepcopy
 import lz4.block as lz4b
 import lz4.frame as lz4f
 
-logger = logging.getLogger(__name__)
+logger = get_lazy_logger(__name__)
 
 _loxapp3_cache_json_last_modified = None
 
@@ -183,7 +184,7 @@ def extractControls(root, lox_category_room: dict) -> tuple[dict, dict, dict]:
         if is_visu_control:
             visu_controls[uid] = controls[uid]
         elif objtype.upper() in SYS_BLACKLIST:
-            logger.warning(f"Skipping {objtype} with id {uid} because it is not capable of being used in the grabber")
+            logger.warning("Skipping %s with id %s because it is not capable of being used in the grabber", objtype, uid)
         else:
             non_visu_controls[uid] = controls[uid]
 
@@ -222,7 +223,7 @@ def extractRoomsAndCategories(root):
         uid = elem.get("U")
         if uid:
             lox_category_room[uid] = elem.get("Title", "")
-    logger.debug(f"lox_category_room: {lox_category_room}")
+    logger.debug("lox_category_room: %s", lox_category_room)
     return lox_category_room
 
 def readXMLstring(xml_path: str):
@@ -242,9 +243,9 @@ def getControlsFromConfigXML(xmlstr: str):
     
     try:    
         root = ET.fromstring(xmlstr.encode('utf-8'))
-        logger.debug(f"XML parsed successfully")
+        logger.debug("XML parsed successfully")
     except ET.XMLSyntaxError as e:
-        logger.warning(f"Standard XML parsing failed: {str(e)}")
+        logger.warning("Standard XML parsing failed: %s", str(e))
         logger.warning("Attempting XML parsing with recovery mode for malformed XML")
         
         # Use lxml recovery mode for malformed XML (handles duplicate attributes, encoding issues, etc.)
@@ -282,8 +283,8 @@ async def load_miniserver_config(ip: str, username: str, password: str, persist:
                 cached_json = os.path.join(config.paths.data_dir, 'LoxAPP3.json')
                 
                 if os.path.exists(cached_xml) and os.path.exists(cached_json):
-                    logger.info(f"Using cached configuration from {cached_xml}")
-                    logger.info(f"Using cached LoxAPP3.json from {cached_json}")
+                    logger.info("Using cached configuration from %s", cached_xml)
+                    logger.info("Using cached LoxAPP3.json from %s", cached_json)
                     
                     async with aiofiles.open(cached_json, 'rb') as f:
                         json_content = orjson.loads(await f.read())
@@ -313,7 +314,7 @@ async def load_miniserver_config(ip: str, username: str, password: str, persist:
                 raise Exception("No configuration files found")
                     
             filename = sorted(filelist)[-1]
-            logger.info(f"Selected configuration file: {filename}")
+            logger.info("Selected configuration file: %s", filename)
             
             # Download the file
             download_file = BytesIO()
@@ -364,12 +365,12 @@ async def load_miniserver_config(ip: str, username: str, password: str, persist:
                 async with aiofiles.open(output_json, 'wb') as f:
                     await f.write(orjson.dumps(json_content))
                     
-                logger.info(f"Configuration saved to {output_xml}")
-                logger.info(f"LoxAPP3.json saved to {output_json}")
+                logger.info("Configuration saved to %s", output_xml)
+                logger.info("LoxAPP3.json saved to %s", output_json)
             
             _loxapp3_cache_json_last_modified = datetime.strptime(json_content["lastModified"], "%Y-%m-%d %H:%M:%S")
             return config_content, json_content
                     
     except Exception as e:
-        logger.error(f"Error loading miniserver configuration: {str(e)}")
+        logger.error("Error loading miniserver configuration: %s", str(e))
         raise

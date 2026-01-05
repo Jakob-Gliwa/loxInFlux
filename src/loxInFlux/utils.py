@@ -3,91 +3,27 @@ import functools
 import logging
 import time
 import orjson as json
-from typing import Callable, TypeVar, ParamSpec, Optional
+from typing import Callable, TypeVar, ParamSpec
 
 import aiohttp
 import asyncio
 
-from loxInFlux.argparser import get_args
 from .config import config
+from .logger import (
+    get_lazy_logger,
+    configure_logging,
+    ensure_basic_logging,
+    initialize_logging,
+    TRACE_LEVEL,
+)
 
 T = TypeVar('T')
 P = ParamSpec('P')
 
 CMD_GET_LOXAPP3_JSON_LAST_MODIFIED = "jdev/sps/LoxAPPversion3"
 
-logger = logging.getLogger(__name__)
+logger = get_lazy_logger(__name__)
 
-
-# Define TRACE level (lower than DEBUG)
-TRACE_LEVEL = 5  # DEBUG is 10, so we make TRACE lower
-logging.addLevelName(TRACE_LEVEL, 'TRACE')
-
-class TelegrafFormatter(logging.Formatter):
-    """Custom formatter for Telegraf execd logging format."""
-    
-    LEVEL_PREFIXES = {
-        logging.ERROR: 'E!',
-        logging.WARNING: 'W!',
-        logging.INFO: 'I!',
-        logging.DEBUG: 'D!',
-        TRACE_LEVEL: 'T!'  # Use our custom TRACE level
-    }
-    
-    def format(self, record):
-        """Format the log record according to Telegraf execd specifications."""
-        # Get the appropriate prefix for the log level
-        prefix = self.LEVEL_PREFIXES.get(record.levelno, 'E!')
-        
-        # Format the message with timestamp and other details
-        formatted_msg = super().format(record)
-        
-        # Return the message with the appropriate prefix
-        return f"{prefix} {formatted_msg}"
-
-# Add trace method to Logger class
-def trace(self, message, *args, **kwargs):
-    """Log 'msg % args' with severity 'TRACE'."""
-    if self.isEnabledFor(TRACE_LEVEL):
-        self._log(TRACE_LEVEL, message, args, **kwargs)
-
-# Add trace method to Logger class
-logging.Logger.trace = trace
-
-def configure_logging(level: str = "INFO", use_telegraf_format: bool = False):
-    """Configure logging with appropriate formatter based on configuration.
-    
-    Args:
-        level: Logging level to use
-        use_telegraf_format: Whether to use Telegraf execd formatting
-    """
-    root_logger = logging.getLogger()
-    
-    # Clear any existing handlers
-    root_logger.handlers.clear()
-    
-    # Create console handler
-    console_handler = logging.StreamHandler()
-    
-    # Set formatter based on configuration
-    if use_telegraf_format:
-        formatter = TelegrafFormatter('%(message)s')
-    else:
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    
-    console_handler.setFormatter(formatter)
-    root_logger.addHandler(console_handler)
-    
-    # Set log level
-    log_level = getattr(logging, level.upper(), logging.INFO)
-    root_logger.setLevel(log_level)
-
-# Update the ensure_basic_logging function
-def ensure_basic_logging():
-    """Ensures that basic logging is configured if no handlers exist."""
-    if not logging.getLogger().handlers:
-        use_telegraf = config.telegraf.protocol.lower() == "execd"
-        configure_logging(config.logging.level, use_telegraf)
 
 def get_numeric_value_if_possible(value):
     try:
@@ -98,21 +34,6 @@ def get_numeric_value_if_possible(value):
             return round(float_value, config.general.rounding_precision) if config.general.round_floats else float_value
         except ValueError:
             return value
-
-def initialize_logging():
-    args = get_args()
-    # Initialize config with command line arguments
-    
-    # Set logging level - prioritize args over config
-    log_level = args.log_level.upper() if args.log_level else config.logging.level.upper()
-    
-    # Determine if we should use Telegraf formatting
-    use_telegraf_format = config.telegraf.protocol.lower() == "execd"
-    
-    # Configure logging with appropriate format
-    configure_logging(log_level, use_telegraf_format)
-    
-    return args
 
 def _build_base_url():
         protocol = "https" if config.miniserver.port == 443 else "http"
@@ -144,12 +65,12 @@ def log_performance(name: Optional[str] = None, severity: Optional[int] = loggin
                 result = func(*args, **kwargs)
                 end_time = time.perf_counter_ns()
                 duration_ms = (end_time - start_time)
-                logger.log(severity, f"Performance: {operation_name} took {duration_ms:.2f}ns")
+                logger.log(severity, "Performance: %s took %.2fns", operation_name, duration_ms)
                 return result
             except Exception as e:
                 end_time = time.perf_counter_ns()
                 duration_ms = (end_time - start_time)
-                logger.debug(f"Performance: {operation_name} failed after {duration_ms:.2f}ns with error: {str(e)}")
+                logger.debug("Performance: %s failed after %.2fns with error: %s", operation_name, duration_ms, str(e))
                 raise
                 
         return wrapper
@@ -160,9 +81,9 @@ def log_performance(name: Optional[str] = None, severity: Optional[int] = loggin
 def checkIfElementInLox3APP(loxapp3_json_control_list, controls, uuid):
     if uuid not in loxapp3_json_control_list:
         if uuid in controls and "parent_uuid" in controls[uuid] and controls[uuid]["parent_uuid"] in loxapp3_json_control_list:
-            logger.debug(f"{uuid} parent in LoxAPP3.json")
+            logger.debug("%s parent in LoxAPP3.json", uuid)
         else:
-            logger.warn(f"{uuid} not in the LoxAPP3.json and not in the overall controls list")
+            logger.warning("%s not in the LoxAPP3.json and not in the overall controls list", uuid)
 
 
 async def get_loxapp3_json_last_modified():

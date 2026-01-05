@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "loxInFlux"
-version = "0.1.0"
+version = "0.2.0"
 description = "Loxone to InfluxDB Bridge"
 authors = [
     { name = "Jakob Gliwa", email = "your.email@example.com" }
@@ -24,7 +24,7 @@ dependencies = [
     "tomli>=2.3.0",
     "gmqtt>=0.7.0",
     "construct>=2.10.70",
-    "loxwebsocket>=0.5.1"
+    "loxwebsocket>=0.5.2"
 ]
 
 [project.optional-dependencies]

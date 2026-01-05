@@ -12,8 +12,9 @@ import signal
 import uvloop
 from .utils import _build_base_url, get_numeric_value_if_possible, initialize_logging
 from .grabber import LoxoneGrabber
+from .logger import get_lazy_logger
 
-logger = logging.getLogger(__name__)
+logger = get_lazy_logger(__name__)
 
 def on_exit():
     logger.info("LoxInFlux exited")
@@ -51,12 +52,12 @@ class LoxInfluxBridge:
                 asyncio.create_task(telegraf.write(point))
             except KeyError:
                 if uuid in self.controls:
-                    logger.warning(f"{uuid} not in initial websocket controls list. It is in the overall controls though. adding it to websocket controls.") 
+                    logger.warning("%s not in initial websocket controls list. It is in the overall controls though. adding it to websocket controls.", uuid) 
                     self.websocket_controls[uuid] = self.controls[uuid]
                     point = b"".join([self.websocket_controls[uuid]["point_websocket"],  self.formatter(value).encode(), timestamp])
                     asyncio.create_task(telegraf.write(point))
                 else:
-                    logger.debug(f"Omitting {uuid} because it is not in the (websocket) controls list")
+                    logger.debug("Omitting %s because it is not in the (websocket) controls list", uuid)
         #for uuid, value in message.items():
         #    await self.process_loxone_value_state_item(uuid, value, timestamp)
         #tasks = map(lambda item: self.process_loxone_value_state_item(item[0], item[1], timestamp), message.items())
@@ -74,7 +75,7 @@ class LoxInfluxBridge:
                             point = point.field(str(value.get("name") if value.get("name") else value.get("nr") if value.get("nr") else b'Subdefault'), get_numeric_value_if_possible(value.get("value"))).time(time.time_ns())
                 await telegraf.write(point.to_line_protocol().encode())
             else:
-                logger.warning(f"Omitting {uuid} because it is not in the grabber controls list")
+                logger.warning("Omitting %s because it is not in the grabber controls list", uuid)
 
     async def main(self):
         # Initialize telegraf connection and gather controls
@@ -117,7 +118,8 @@ class LoxInfluxBridge:
         self.websocket_controls.update(new_websocket_controls)
         self.grabber_controls.clear()
         self.grabber_controls.update(new_grabber_controls)
-        logger.info(f"Extracted {len(self.controls)} controls, {len(self.websocket_controls)} websocket controls, {len(self.grabber_controls)} grabber controls")
+        logger.info("Extracted %d controls, %d websocket controls, %d grabber controls", 
+                    len(self.controls), len(self.websocket_controls), len(self.grabber_controls))
 
         self.grabber_controls_updated.set()
         
@@ -132,9 +134,9 @@ class LoxInfluxBridge:
             self.ws_client_initialized.set()
             await self._shutdown_event.wait()
         except LoxoneException as e:
-            logger.error(f"Failed to establish or maintain WebSocket connection: {e}")
+            logger.error("Failed to establish or maintain WebSocket connection: %s", e)
             # Attempts to Reconnect not successfull - shutting down
-            raise RuntimeError(f"Failed to establish or maintain WebSocket connection: {e}")
+            raise RuntimeError(f"Failed to establish or maintain WebSocket connection: {e}")  # Exception message - f-string ok
         finally:
             if self.ws_client:
                 await self.ws_client.stop()
@@ -153,7 +155,7 @@ class LoxInfluxBridge:
         for task in tasks:
             task.cancel()
         
-        logger.info(f"Waiting for {len(tasks)} tasks to complete...")
+        logger.info("Waiting for %d tasks to complete...", len(tasks))
         await asyncio.gather(*tasks, return_exceptions=True)
         logger.info("Shutdown complete")
 
@@ -195,7 +197,7 @@ def main():
     except KeyboardInterrupt:
         pass
     except RuntimeError as e:
-        logger.error(f"RuntimeError: {e}")
+        logger.error("RuntimeError: %s", e)
     finally:
         # Run cleanup
         asyncio.run(bridge.shutdown())
