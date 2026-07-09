@@ -1,6 +1,7 @@
 from datetime import datetime
 import functools
 import logging
+import re
 import time
 import orjson as json
 from typing import Callable, TypeVar, ParamSpec, Optional
@@ -25,15 +26,34 @@ CMD_GET_LOXAPP3_JSON_LAST_MODIFIED = "jdev/sps/LoxAPPversion3"
 logger = get_lazy_logger(__name__)
 
 
+# Matches a single leading number (optional sign/decimals) followed only by a
+# non-numeric unit, e.g. "523ppm", "22.3°", "65%", "0.158kW", "-5.2 °C".
+# Deliberately strict: strings that contain further digits after the number
+# (dates like "2026-07-09", times like "12:34") do NOT match and stay untouched.
+_NUMERIC_WITH_UNIT = re.compile(r'^\s*(-?\d+(?:\.\d+)?)\s*[^\d\s]*$')
+
+
 def get_numeric_value_if_possible(value):
+    # Always coerce numeric values to float (never int) so the grabber path agrees
+    # with the websocket path, which already emits floats. A single InfluxDB field
+    # that receives both int and float values raises a "field type conflict" and the
+    # mismatching points are silently dropped, so a consistent numeric type matters.
     try:
-        return int(value)
-    except ValueError:
-        try:
-            float_value = float(value)
-            return round(float_value, config.general.rounding_precision) if config.general.round_floats else float_value
-        except ValueError:
+        float_value = float(value)
+    except (ValueError, TypeError):
+        # Many Loxone sensor controls (InfoOnlyAnalog and friends) report their
+        # value WITH a unit as a string, e.g. "523ppm", "22.3°", "65%", "0.158kW",
+        # which float() cannot parse. Extract a leading number followed only by a
+        # unit. Anything else (genuine text, dates, times) is returned unchanged.
+        if isinstance(value, str):
+            match = _NUMERIC_WITH_UNIT.match(value)
+            if match:
+                float_value = float(match.group(1))
+            else:
+                return value
+        else:
             return value
+    return round(float_value, config.general.rounding_precision) if config.general.round_floats else float_value
 
 def _build_base_url():
         protocol = "https" if config.miniserver.port == 443 else "http"
