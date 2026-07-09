@@ -34,26 +34,26 @@ _NUMERIC_WITH_UNIT = re.compile(r'^\s*(-?\d+(?:\.\d+)?)\s*[^\d\s]*$')
 
 
 def get_numeric_value_if_possible(value):
+    # Always coerce numeric values to float (never int) so the grabber path agrees
+    # with the websocket path, which already emits floats. A single InfluxDB field
+    # that receives both int and float values raises a "field type conflict" and the
+    # mismatching points are silently dropped, so a consistent numeric type matters.
     try:
-        return int(value)
+        float_value = float(value)
     except (ValueError, TypeError):
-        try:
-            float_value = float(value)
-            return round(float_value, config.general.rounding_precision) if config.general.round_floats else float_value
-        except (ValueError, TypeError):
-            # Many Loxone sensor controls (InfoOnlyAnalog and friends) report their
-            # value WITH a unit as a string, e.g. "523ppm", "22.3°", "65%", "0.158kW".
-            # Without coercion these are stored as strings, while the SAME field
-            # coming through the websocket path is a float. In InfluxDB the field
-            # type is fixed per shard, so the mismatching writes are rejected
-            # ("field type conflict") and silently dropped. Parse a leading number
-            # followed only by a unit as float so both paths agree.
-            if isinstance(value, str):
-                match = _NUMERIC_WITH_UNIT.match(value)
-                if match:
-                    float_value = float(match.group(1))
-                    return round(float_value, config.general.rounding_precision) if config.general.round_floats else float_value
+        # Many Loxone sensor controls (InfoOnlyAnalog and friends) report their
+        # value WITH a unit as a string, e.g. "523ppm", "22.3°", "65%", "0.158kW",
+        # which float() cannot parse. Extract a leading number followed only by a
+        # unit. Anything else (genuine text, dates, times) is returned unchanged.
+        if isinstance(value, str):
+            match = _NUMERIC_WITH_UNIT.match(value)
+            if match:
+                float_value = float(match.group(1))
+            else:
+                return value
+        else:
             return value
+    return round(float_value, config.general.rounding_precision) if config.general.round_floats else float_value
 
 def _build_base_url():
         protocol = "https" if config.miniserver.port == 443 else "http"
