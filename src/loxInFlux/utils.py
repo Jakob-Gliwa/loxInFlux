@@ -1,6 +1,7 @@
 from datetime import datetime
 import functools
 import logging
+import re
 import time
 import orjson as json
 from typing import Callable, TypeVar, ParamSpec, Optional
@@ -25,14 +26,33 @@ CMD_GET_LOXAPP3_JSON_LAST_MODIFIED = "jdev/sps/LoxAPPversion3"
 logger = get_lazy_logger(__name__)
 
 
+# Matches a single leading number (optional sign/decimals) followed only by a
+# non-numeric unit, e.g. "523ppm", "22.3°", "65%", "0.158kW", "-5.2 °C".
+# Deliberately strict: strings that contain further digits after the number
+# (dates like "2026-07-09", times like "12:34") do NOT match and stay untouched.
+_NUMERIC_WITH_UNIT = re.compile(r'^\s*(-?\d+(?:\.\d+)?)\s*[^\d\s]*$')
+
+
 def get_numeric_value_if_possible(value):
     try:
         return int(value)
-    except ValueError:
+    except (ValueError, TypeError):
         try:
             float_value = float(value)
             return round(float_value, config.general.rounding_precision) if config.general.round_floats else float_value
-        except ValueError:
+        except (ValueError, TypeError):
+            # Many Loxone sensor controls (InfoOnlyAnalog and friends) report their
+            # value WITH a unit as a string, e.g. "523ppm", "22.3°", "65%", "0.158kW".
+            # Without coercion these are stored as strings, while the SAME field
+            # coming through the websocket path is a float. In InfluxDB the field
+            # type is fixed per shard, so the mismatching writes are rejected
+            # ("field type conflict") and silently dropped. Parse a leading number
+            # followed only by a unit as float so both paths agree.
+            if isinstance(value, str):
+                match = _NUMERIC_WITH_UNIT.match(value)
+                if match:
+                    float_value = float(match.group(1))
+                    return round(float_value, config.general.rounding_precision) if config.general.round_floats else float_value
             return value
 
 def _build_base_url():
