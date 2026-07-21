@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# VCS / tooling
+.git/
+.gitignore
+.github/
+.vscode/
+
+# Docs / research / local data not needed in the image
+Recherche/
+data/
+config/config.toml
+profile_results.html
+*.log
+logs/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Local scratch
+benchmark*.py
+newbench.py
+.DS_Store

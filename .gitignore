@@ -3,7 +3,6 @@
 Recherche/
 src/loxInFlux/__pycache__/
 src/loxwebsocket/__pycache__/
-uv.lock
 config_sps_0250_20241229211340.xml
 .DS_Store
 data/
