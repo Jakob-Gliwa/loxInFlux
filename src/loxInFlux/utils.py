@@ -1,8 +1,12 @@
 import functools
 import logging
+import platform
+import subprocess
+import sys
 import time
 from collections.abc import Callable
 from datetime import datetime
+from importlib import metadata
 from typing import ParamSpec, TypeVar
 
 import aiohttp
@@ -20,6 +24,140 @@ P = ParamSpec("P")
 CMD_GET_LOXAPP3_JSON_LAST_MODIFIED = "jdev/sps/LoxAPPversion3"
 
 logger = get_lazy_logger(__name__)
+
+
+################################################################################
+# CPU / architecture detection
+#
+# Dependency-free (no lscpu, absent from slim images): reads /proc/cpuinfo on
+# Linux and sysctl on macOS, defaulting to False when in doubt so we never pick
+# a native code path the CPU cannot run.
+################################################################################
+
+_X86_TOKENS = frozenset({"x86_64", "amd64", "i386", "i686", "x86"})
+
+
+@functools.lru_cache(maxsize=1)
+def machine() -> str:
+    return platform.machine().lower()
+
+
+@functools.lru_cache(maxsize=1)
+def is_x86() -> bool:
+    return machine() in _X86_TOKENS
+
+
+@functools.lru_cache(maxsize=1)
+def has_avx2() -> bool:
+    """Whether this (x86) CPU supports AVX2. Always False on non-x86."""
+    if not is_x86():
+        return False
+
+    system = platform.system()
+    try:
+        if system == "Linux":
+            with open("/proc/cpuinfo", encoding="utf-8", errors="ignore") as fh:
+                text = fh.read().lower()
+        elif system == "Darwin":
+            text = subprocess.check_output(["sysctl", "-a"], text=True).lower()
+        elif system == "Windows":
+            text = subprocess.check_output(
+                "wmic cpu get Caption", shell=True, text=True
+            ).lower()
+        else:
+            return False
+    except OSError, subprocess.SubprocessError:
+        return False
+
+    return "avx2" in text
+
+
+@functools.cache
+def native_import_runs(probe_code: str) -> bool:
+    """True iff *probe_code* runs to completion in a fresh subprocess on THIS CPU.
+
+    Gate for native deps that ship CPU-specific code with no runtime dispatch
+    (e.g. a pygixml build compiled with AVX2 / -march=native): importing such a
+    build on a CPU missing an instruction raises SIGILL (exit 132) and takes the
+    whole process down, uncatchable in-process. Running the risky import in a
+    throwaway child turns that hard crash into a boolean, so the caller can fall
+    back (e.g. to lxml) instead of dying. Result is cached.
+    """
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-c", probe_code],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=30,
+            check=False,
+        )
+    except OSError, subprocess.SubprocessError:
+        return False
+    return proc.returncode == 0
+
+
+################################################################################
+# Startup diagnostics
+################################################################################
+
+# Dependencies worth pinning down when triaging crashes / deployment issues.
+_KEY_PACKAGES = (
+    "aiohttp",
+    "orjson",
+    "pycryptodome",
+    "uvloop",
+    "gmqtt",
+    "lxml",
+    "pygixml",
+    "lz4",
+    "loxwebsocket",
+    "influxdb-client",
+    "construct",
+)
+
+
+def _dependency_versions() -> str:
+    parts = []
+    for name in _KEY_PACKAGES:
+        try:
+            parts.append(f"{name}={metadata.version(name)}")
+        except metadata.PackageNotFoundError:
+            parts.append(f"{name}=<not installed>")
+    return ", ".join(parts)
+
+
+def log_runtime_environment() -> None:
+    """Emit the startup environment banner at INFO level.
+
+    Localizes future deployment issues across amd64/arm64/Pi: records the active
+    XML parser, CPU features and key dependency versions in one place. Called
+    once from app.main() after logging is configured.
+    """
+    import loxInFlux
+    from loxInFlux import miniserver
+
+    logger.info("----- loxInFlux runtime environment -----")
+    logger.info(
+        "version=%s  python=%s  executable=%s",
+        getattr(loxInFlux, "__version__", "unknown"),
+        platform.python_version(),
+        sys.executable,
+    )
+    logger.info(
+        "platform=%s %s  arch=%s  (x86=%s, avx2=%s)",
+        platform.system(),
+        platform.release(),
+        platform.machine(),
+        is_x86(),
+        has_avx2(),
+    )
+    logger.info(
+        "xml parser: %s  (%s)",
+        getattr(miniserver, "ACTIVE_XML_PARSER", "lxml"),
+        getattr(miniserver, "XML_PARSER_REASON", "default"),
+    )
+    logger.info("dependencies: %s", _dependency_versions())
+    logger.info("-----------------------------------------")
 
 
 def get_numeric_value_if_possible(value):
@@ -109,7 +247,7 @@ async def get_loxapp3_json_last_modified():
     async with (
         aiohttp.ClientSession(
             auth=aiohttp.BasicAuth(
-                login=config.miniserver.username, password=config.miniserver.password
+                login=config.miniserver.user, password=config.miniserver.password
             ),
             timeout=aiohttp.ClientTimeout(total=30),
         ) as client,

@@ -16,7 +16,6 @@ dependencies = [
     "lxml>=6.1.1",
     "lz4>=4.4.5",
     "influxdb-client>=1.50.0",
-    "aioftp>=0.27.2",
     "aiofiles>=25.1.0",
     "orjson>=3.11.9",
     "uvloop>=0.22.1",
@@ -24,7 +23,8 @@ dependencies = [
     "tomli>=2.4.1",
     "gmqtt>=0.7.0",
     "construct>=2.10.70",
-    "loxwebsocket>=0.6.0"
+    "loxwebsocket>=0.6.0",
+    "pygixml>=0.12.1"
 ]
 
 [project.optional-dependencies]
@@ -74,3 +74,6 @@ known-first-party = ["loxInFlux"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]  # re-exports are expected in package inits
+# Micro-benchmarks deliberately read attributes without storing them to measure
+# traversal cost, which B018 would otherwise flag as useless.
+"benchmarks/*" = ["B018"]

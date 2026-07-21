@@ -8,6 +8,8 @@ config_sps_0250_20241229211340.xml
 data/
 config/config.toml
 profile_results.html
+# Local-only performance/parity benchmarks (not part of the shipped package)
+benchmarks/
 src/loxwebsocket/build/lib.macosx-14.0-arm64-cpython-313/extractor.cpython-313-darwin.so
 src/loxwebsocket/build/temp.macosx-14.0-arm64-cpython-313/extractor.o
 src/loxwebsocket/cython_modules/build/lib.macosx-14.0-arm64-cpython-313/extractor.cpython-313-darwin.so

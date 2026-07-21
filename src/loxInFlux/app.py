@@ -12,9 +12,13 @@ from loxInFlux.miniserver import getControlsFromConfigXML, load_miniserver_confi
 
 from .config import config
 from .grabber import LoxoneGrabber
-from .logger import get_lazy_logger
+from .logger import get_lazy_logger, initialize_logging
 from .telegraf import telegraf
-from .utils import _build_base_url, get_numeric_value_if_possible, initialize_logging
+from .utils import (
+    _build_base_url,
+    get_numeric_value_if_possible,
+    log_runtime_environment,
+)
 
 logger = get_lazy_logger(__name__)
 
@@ -147,7 +151,6 @@ class LoxInfluxBridge:
 
     async def init_gather_controls_from_miniserver(self):
         config_xml, loxapp3_json = await load_miniserver_config(
-            config.miniserver.host,
             config.miniserver.user,
             config.miniserver.password,
             persist=True,
@@ -251,6 +254,9 @@ async def run_bridge(bridge):
 def main():
     # Get command line arguments including config_dir and data_dir
     initialize_logging()
+
+    # Emit the runtime environment banner once, right after logging is set up.
+    log_runtime_environment()
 
     bridge = LoxInfluxBridge()
 
