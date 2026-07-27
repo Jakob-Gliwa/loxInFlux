@@ -1,18 +1,20 @@
 from .app import LoxInfluxBridge, main
-from .config import config
+from .config import get_config, init_config
 from .logger import LazyLogger, configure_logging, get_lazy_logger, initialize_logging
-from .telegraf import telegraf
+from .telegraf import get_telegraf, init_telegraf
 from .utils import log_performance
 
 __all__ = [
     "LoxInfluxBridge",
-    "config",
+    "get_config",
+    "init_config",
     "get_lazy_logger",
     "configure_logging",
     "initialize_logging",
     "LazyLogger",
     "main",
     "log_performance",
-    "telegraf",
+    "get_telegraf",
+    "init_telegraf",
 ]
-__version__ = "0.2.0"
+__version__ = "0.3.0"

@@ -12,7 +12,7 @@ from typing import ParamSpec, TypeVar
 import aiohttp
 import orjson as json
 
-from .config import config
+from .config import get_config
 from .logger import (
     ensure_basic_logging,
     get_lazy_logger,
@@ -49,7 +49,12 @@ def is_x86() -> bool:
 
 @functools.lru_cache(maxsize=1)
 def has_avx2() -> bool:
-    """Whether this (x86) CPU supports AVX2. Always False on non-x86."""
+    """Whether this (x86) CPU supports AVX2. Always False on non-x86.
+
+    Diagnostic only (reported once by log_runtime_environment). The pygixml
+    fast-path gate is the subprocess probe in native_import_runs, not this flag,
+    so a conservative False here never risks a SIGILL - it only omits a banner.
+    """
     if not is_x86():
         return False
 
@@ -57,19 +62,25 @@ def has_avx2() -> bool:
     try:
         if system == "Linux":
             with open("/proc/cpuinfo", encoding="utf-8", errors="ignore") as fh:
-                text = fh.read().lower()
+                text = fh.read()
         elif system == "Darwin":
-            text = subprocess.check_output(["sysctl", "-a"], text=True).lower()
-        elif system == "Windows":
+            # AVX2 is advertised in the CPUID leaf-7 feature set; query just that
+            # key instead of dumping all of `sysctl -a`.
             text = subprocess.check_output(
-                "wmic cpu get Caption", shell=True, text=True
-            ).lower()
+                ["sysctl", "-n", "machdep.cpu.leaf7_features"], text=True
+            )
         else:
+            # No reliable dependency-free AVX2 probe elsewhere. Notably on
+            # Windows `wmic cpu get Caption` returns the model name, never the
+            # feature flags (and wmic is deprecated/removed on recent builds),
+            # so we report unknown (False) rather than pretend to detect it.
             return False
     except OSError, subprocess.SubprocessError:
         return False
 
-    return "avx2" in text
+    # Token match: /proc/cpuinfo and sysctl both list flags space-separated, so
+    # split guards against substring false positives (and future avx-* tokens).
+    return "avx2" in text.lower().split()
 
 
 @functools.cache
@@ -151,6 +162,9 @@ def log_runtime_environment() -> None:
         is_x86(),
         has_avx2(),
     )
+    # The parser probe is deferred out of import time, so resolve it here - this
+    # banner is the first thing that wants to know the active backend.
+    miniserver._ensure_pygixml()
     logger.info(
         "xml parser: %s  (%s)",
         getattr(miniserver, "ACTIVE_XML_PARSER", "lxml"),
@@ -166,9 +180,10 @@ def get_numeric_value_if_possible(value):
     except ValueError:
         try:
             float_value = float(value)
+            cfg = get_config()
             return (
-                round(float_value, config.general.rounding_precision)
-                if config.general.round_floats
+                round(float_value, cfg.general.rounding_precision)
+                if cfg.general.round_floats
                 else float_value
             )
         except ValueError:
@@ -176,15 +191,15 @@ def get_numeric_value_if_possible(value):
 
 
 def _build_base_url():
-    protocol = "https" if config.miniserver.port == 443 else "http"
-
-    # Include port in URL if it's not the default port for the protocol
-    if (protocol == "http" and config.miniserver.port != 80) or (
-        protocol == "https" and config.miniserver.port != 443
-    ):
-        return f"{protocol}://{config.miniserver.host}:{config.miniserver.port}"
-    else:
-        return f"{protocol}://{config.miniserver.host}"
+    # Loxone serves https only on the standard TLS port 443; every other port is
+    # plain http (there is no https-on-custom-port case for a Miniserver). The
+    # port is appended only when it deviates from http's default of 80.
+    ms = get_config().miniserver
+    if ms.port == 443:
+        return f"https://{ms.host}"
+    if ms.port == 80:
+        return f"http://{ms.host}"
+    return f"http://{ms.host}:{ms.port}"
 
 
 def log_performance(name: str | None = None, severity: int | None = logging.DEBUG):
@@ -246,9 +261,13 @@ def checkIfElementInLox3APP(loxapp3_json_control_list, controls, uuid):
 async def get_loxapp3_json_last_modified():
     async with (
         aiohttp.ClientSession(
-            auth=aiohttp.BasicAuth(
-                login=config.miniserver.user, password=config.miniserver.password
-            ),
+            # aiohttp.BasicAuth is deprecated (removed in 4.0); build the header
+            # ourselves via the non-deprecated encode_basic_auth helper instead.
+            headers={
+                "Authorization": aiohttp.encode_basic_auth(
+                    get_config().miniserver.user, get_config().miniserver.password
+                )
+            },
             timeout=aiohttp.ClientTimeout(total=30),
         ) as client,
         client.get(

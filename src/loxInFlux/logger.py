@@ -9,9 +9,8 @@ Provides:
 
 import logging
 import os
-import sys
 
-from .config import config
+from .config import get_config
 
 # =============================================================================
 # TRACE Level Support (lower than DEBUG)
@@ -156,20 +155,16 @@ def configure_logging(
     if _configured and not force:
         return
 
-    # Determine log level from various sources
+    # Determine log level from various sources. The parsed ``--log-level`` CLI
+    # argument has highest priority, but the real startup path
+    # (``initialize_logging``) passes it explicitly, so it never reaches this
+    # ``level is None`` branch. Here we only resolve the auto-config fallback:
+    # environment variable first, then the config file.
     if level is None:
-        # Command line argument has highest priority
-        if len(sys.argv) > 1 and sys.argv[1].upper() == "--DEBUG":
-            level = "DEBUG"
-        # Check argparser if available
-        elif hasattr(config, "_args") and getattr(config._args, "log_level", None):
-            level = config._args.log_level.upper()
-        # Environment variable has second priority
-        elif env_level := os.getenv("APP_LOG_LEVEL"):
+        if env_level := os.getenv("APP_LOG_LEVEL"):
             level = env_level.upper()
-        # Config file has lowest priority
         else:
-            level = config.logging.level
+            level = get_config().logging.level
 
     # Get root logger
     root_logger = logging.getLogger()
@@ -217,10 +212,14 @@ def get_lazy_logger(name: str | None = None) -> LazyLogger:
     """
     global _configured
 
-    # Auto-configure on first use
+    # Auto-configure on first use. This runs at import time (module-level
+    # ``get_lazy_logger(__name__)`` calls), so it must NOT read the app config -
+    # otherwise importing loxInFlux would eagerly require a config.toml. We
+    # bootstrap with an explicit level (env or INFO) and plain formatting;
+    # ``initialize_logging()`` reconfigures this properly (level + Telegraf
+    # format) at startup once the config is loaded.
     if not _configured:
-        use_telegraf = config.telegraf.protocol.lower() == "execd"
-        configure_logging(use_telegraf_format=use_telegraf)
+        configure_logging(level=os.getenv("APP_LOG_LEVEL", "INFO"))
 
     # Cache and return LazyLogger instances
     cache_key = name or "__root__"
@@ -231,36 +230,28 @@ def get_lazy_logger(name: str | None = None) -> LazyLogger:
     return _lazy_loggers[cache_key]
 
 
-def initialize_logging() -> object:
+def initialize_logging(log_level: str | None = None) -> None:
     """
-    Initialize logging with command line arguments.
+    Initialize logging at application startup.
 
-    Call this at application startup to configure logging based on
-    command line arguments and configuration.
+    The caller owns argument parsing: ``main()`` passes the ``--log-level`` it
+    parsed, which takes precedence over the configured level. Reading the CLI
+    here instead would couple every caller (and every test) to the global
+    ``sys.argv``.
 
-    Returns:
-        The parsed command line arguments.
+    Args:
+        log_level: Level from the command line, if any. Falls back to the
+                   configured ``logging.level`` when None.
     """
-    from loxInFlux.argparser import get_args
-
-    args = get_args()
-
-    # Set logging level - prioritize args over config
-    log_level = (
-        args.log_level.upper() if args.log_level else config.logging.level.upper()
-    )
-
-    # Determine if we should use Telegraf formatting
-    use_telegraf_format = config.telegraf.protocol.lower() == "execd"
-
-    # Configure logging with appropriate format
-    configure_logging(log_level, use_telegraf_format, force=True)
-
-    return args
+    cfg = get_config()
+    level = (log_level or cfg.logging.level).upper()
+    use_telegraf_format = cfg.telegraf.protocol.lower() == "execd"
+    configure_logging(level, use_telegraf_format, force=True)
 
 
 def ensure_basic_logging() -> None:
     """Ensures that basic logging is configured if no handlers exist."""
     if not logging.getLogger().handlers:
-        use_telegraf = config.telegraf.protocol.lower() == "execd"
-        configure_logging(config.logging.level, use_telegraf)
+        cfg = get_config()
+        use_telegraf = cfg.telegraf.protocol.lower() == "execd"
+        configure_logging(cfg.logging.level, use_telegraf)

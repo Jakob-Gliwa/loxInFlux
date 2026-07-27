@@ -1,8 +1,7 @@
 import os
+import tomllib
 from dataclasses import dataclass, field
 from typing import Any
-
-import tomli
 
 from loxInFlux.argparser import get_args
 
@@ -64,6 +63,17 @@ class TelegrafConfig:
         )
 
 
+def _as_key(uuid: str | bytes) -> bytes:
+    """Normalise a UUID to ``bytes`` for filter comparisons.
+
+    ``getControlsFromConfigXML`` keys controls (and their ``parent_uuid``) by
+    UUID *bytes*, while the TOML-configured black/whitelists arrive as ``str``.
+    Coercing both sides to ``bytes`` makes the filters actually bite regardless
+    of how the UUID was supplied.
+    """
+    return uuid.encode() if isinstance(uuid, str) else uuid
+
+
 @dataclass(frozen=True)
 class FilterConfig:
     type_blacklist: list[str] = field(default_factory=list)
@@ -79,20 +89,25 @@ class FilterConfig:
         object.__setattr__(
             self, "type_whitelist", set(map(str.upper, self.type_whitelist))
         )
-        object.__setattr__(self, "uuid_blacklist", set(self.uuid_blacklist))
-        object.__setattr__(self, "uuid_whitelist", set(self.uuid_whitelist))
+        object.__setattr__(
+            self, "uuid_blacklist", {_as_key(u) for u in self.uuid_blacklist}
+        )
+        object.__setattr__(
+            self, "uuid_whitelist", {_as_key(u) for u in self.uuid_whitelist}
+        )
 
-    def should_include_control(self, control_type: str, uuid: str) -> bool:
+    def should_include_control(self, control_type: str, uuid: str | bytes) -> bool:
         """Determine if a control should be included based on the filter rules.
 
         Args:
             control_type: The type of the control
-            uuid: The UUID of the control
+            uuid: The UUID of the control (``str`` or ``bytes``)
 
         Returns:
             bool: True if the control should be included, False otherwise
         """
         control_type = control_type.upper()
+        uuid = _as_key(uuid)
 
         # If whitelists are not empty, only include items in the whitelist
         if self.type_whitelist:
@@ -186,9 +201,16 @@ class AppConfig:
             config_dir: Optional directory containing config.toml
             data_dir: Optional directory for storing miniserver data
         """
-        args = get_args()
-        config_dir = args.config_dir
-        data_dir = args.data_dir
+        # Explicitly passed directories take precedence; only consult the CLI
+        # args as a fallback for the values that were not supplied. ``get_args``
+        # runs ``argparse.parse_args()`` against ``sys.argv``, so calling it
+        # unconditionally would abort under foreign argv (e.g. pytest flags) and
+        # would silently override the documented ``config_dir``/``data_dir``
+        # parameters (historical bug).
+        if config_dir is None or data_dir is None:
+            args = get_args()
+            config_dir = config_dir if config_dir is not None else args.config_dir
+            data_dir = data_dir if data_dir is not None else args.data_dir
 
         # Default config path if not specified
         default_config_dir = "config"
@@ -206,7 +228,7 @@ class AppConfig:
             raise FileNotFoundError(f"Config file not found at {config_path}")
 
         with open(config_path, "rb") as f:
-            config_dict = tomli.load(f)
+            config_dict = tomllib.load(f)
 
         # Override data_dir if specified
         if data_dir:
@@ -234,14 +256,46 @@ class AppConfig:
         )
 
 
-# Statt direkter Initialisierung eine Funktion für die Initialisierung bereitstellen
-config = AppConfig.load()
+# Importing this module must have no side effects: the configuration is loaded
+# explicitly via ``init_config()`` (from ``main()`` or the test bootstrap), never
+# at import time. This keeps ``import loxInFlux`` working without a ``config.toml``
+# and decouples the whole codebase from an import-time singleton.
+_config: AppConfig | None = None
+
+
+def init_config(
+    config_dir: str | None = None, data_dir: str | None = None
+) -> AppConfig:
+    """Load the configuration and store it as the process-wide singleton."""
+    global _config
+    _config = AppConfig.load(config_dir, data_dir)
+    return _config
+
+
+def get_config() -> AppConfig:
+    """Return the initialized configuration.
+
+    Raises:
+        RuntimeError: if ``init_config()`` has not been called yet.
+    """
+    if _config is None:
+        raise RuntimeError(
+            "Configuration not initialized - call init_config() first "
+            "(main() does this at startup)."
+        )
+    return _config
+
+
+def reset_config() -> None:
+    """Drop the loaded configuration (test isolation helper)."""
+    global _config
+    _config = None
 
 
 # For backwards compatibility
 def get(section: str, key: str, default: Any = None) -> Any:
     """Get a configuration value (legacy method)."""
-    section_obj = getattr(config, section, None)
+    section_obj = getattr(get_config(), section, None)
     if section_obj is None:
         return default
     return getattr(section_obj, key, default)

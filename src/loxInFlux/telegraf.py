@@ -1,12 +1,11 @@
 import abc
 import asyncio
-import contextlib
 import sys
 
 from gmqtt import Client as MQTTClient
 from gmqtt import constants as MQTTconstants
 
-from .config import config
+from .config import get_config
 from .logger import get_lazy_logger
 
 logger = get_lazy_logger(__name__)
@@ -48,8 +47,9 @@ class TelegrafWriter(abc.ABC):
 class UDPTelegrafWriter(TelegrafWriter):
     def __init__(self):
         """Initialize the UDP Telegraf writer with connection details."""
-        self.host = config.telegraf.host
-        self.port = config.telegraf.port
+        cfg = get_config()
+        self.host = cfg.telegraf.host
+        self.port = cfg.telegraf.port
         self.transport = None
         self._initialized = False
 
@@ -98,9 +98,10 @@ class UDPTelegrafWriter(TelegrafWriter):
 class TCPTelegrafWriter(TelegrafWriter):
     def __init__(self):
         """Initialize the TCP Telegraf writer with connection details."""
-        self.host = config.telegraf.host
-        self.port = config.telegraf.port
-        self.max_retries = config.telegraf.max_retries
+        cfg = get_config()
+        self.host = cfg.telegraf.host
+        self.port = cfg.telegraf.port
+        self.max_retries = cfg.telegraf.max_retries
         self.writer = None
         self.reader = None
         self._initialized = False
@@ -113,8 +114,16 @@ class TCPTelegrafWriter(TelegrafWriter):
         return self
 
     async def connect(self) -> None:
-        """Create TCP connection to Telegraf."""
-        for attempt in range(1, self.max_retries):
+        """Create TCP connection to Telegraf.
+
+        ``max_retries <= 0`` retries indefinitely (mirrors the MQTT writer's
+        "unlimited" semantics); otherwise exactly ``max_retries`` attempts are
+        made and the last failure is re-raised to the caller.
+        """
+        unlimited = self.max_retries <= 0
+        attempt = 0
+        while True:
+            attempt += 1
             try:
                 self.reader, self.writer = await asyncio.open_connection(
                     self.host, self.port
@@ -124,8 +133,12 @@ class TCPTelegrafWriter(TelegrafWriter):
                 )
                 return
             except Exception as e:
-                logger.error("Failed to create TCP connection to Telegraf: %s", e)
-                if self.max_retries > 0 and attempt > self.max_retries:
+                logger.error(
+                    "Failed to create TCP connection to Telegraf (attempt %d): %s",
+                    attempt,
+                    e,
+                )
+                if not unlimited and attempt >= self.max_retries:
                     raise
                 await asyncio.sleep(1)
 
@@ -143,6 +156,12 @@ class TCPTelegrafWriter(TelegrafWriter):
     async def write(self, point: bytes) -> None:
         """Write a point to Telegraf via TCP.
 
+        TCP is a byte stream without message boundaries, so each point must be
+        newline-terminated. Telegraf's ``socket_listener`` reads InfluxDB line
+        protocol over TCP line-by-line; without the trailing ``\\n`` consecutive
+        writes would be concatenated (``point1point2``) into a single, malformed
+        line and dropped by the parser.
+
         Args:
             point: InfluxDB Point to write
         """
@@ -151,7 +170,7 @@ class TCPTelegrafWriter(TelegrafWriter):
 
         if point:
             try:
-                self.writer.write(point)
+                self.writer.write(point + b"\n")
                 await self.writer.drain()
             except Exception as e:
                 logger.error("Failed to write to Telegraf: %s", e)
@@ -161,22 +180,23 @@ class TCPTelegrafWriter(TelegrafWriter):
 
 
 class ExecDTelegrafWriter(TelegrafWriter):
-    """Writer that outputs metrics to stdout for Telegraf execd input plugin."""
+    """Writer that outputs metrics to stdout for Telegraf execd input plugin.
+
+    Telegraf's execd input consumes line protocol line-by-line from the child's
+    stdout, so each point is written and flushed immediately. No buffering is
+    used: batching would only add latency without a throughput benefit here.
+    """
 
     def __init__(self):
         """Initialize the ExecD writer."""
         self._initialized = False
-        self._buffer = []
-        self._buffer_size = 5000  # Max number of points to buffer
-        self._flush_task = None
         # Ensure stdout is not buffered
         sys.stdout.reconfigure(line_buffering=True)
 
     async def initialize(self):
-        """Initialize the writer and start flush task."""
+        """Initialize the writer."""
         if not self._initialized:
             self._initialized = True
-            self._flush_task = asyncio.create_task(self._periodic_flush())
             logger.info("Initialized ExecD writer")
         return self
 
@@ -185,39 +205,11 @@ class ExecDTelegrafWriter(TelegrafWriter):
         pass
 
     async def close(self) -> None:
-        """Close the writer and flush remaining points."""
-        if self._flush_task:
-            self._flush_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._flush_task
-        await self._flush_buffer()
+        """Close the writer."""
         self._initialized = False
 
-    async def _periodic_flush(self):
-        """Periodically flush the buffer."""
-        while True:
-            try:
-                await asyncio.sleep(1.0)  # Flush every second
-                await self._flush_buffer()
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error("Error in periodic flush: %s", e)
-
-    async def _flush_buffer(self):
-        """Flush the current buffer to stdout."""
-        if not self._buffer:
-            return
-
-        try:
-            sys.stdout.buffer.write(b"".join(self._buffer))
-            sys.stdout.flush()
-            self._buffer.clear()
-        except Exception as e:
-            logger.error("Failed to flush buffer to stdout: %s", e)
-
     async def write(self, point: bytes) -> None:
-        """Write a point to the buffer.
+        """Write a point to stdout.
 
         Args:
             point: InfluxDB Point to write
@@ -227,7 +219,7 @@ class ExecDTelegrafWriter(TelegrafWriter):
                 sys.stdout.buffer.write(point + b"\n")
                 sys.stdout.flush()
             except Exception as e:
-                logger.error("Failed to write to buffer: %s", e)
+                logger.error("Failed to write to stdout: %s", e)
 
 
 class MQTTTelegrafWriter(TelegrafWriter):
@@ -235,8 +227,9 @@ class MQTTTelegrafWriter(TelegrafWriter):
 
     def __init__(self):
         """Initialize the MQTT Telegraf writer with connection details."""
-        self.mqtt_config = config.telegraf.mqtt
-        self.max_retries = config.telegraf.max_retries
+        cfg = get_config()
+        self.mqtt_config = cfg.telegraf.mqtt
+        self.max_retries = cfg.telegraf.max_retries
         self.client: MQTTClient | None = None
         self._initialized = False
         self._STOP = asyncio.Event()
@@ -311,10 +304,10 @@ class MQTTTelegrafWriter(TelegrafWriter):
                 await self.close()
                 await self.initialize()
 
-    def _on_connect(client, flags, rc, properties, userdata):
+    def _on_connect(self, client, flags, rc, properties):
         logger.info("MQTT connected")
 
-    def _on_disconnect(client, packet, exc=None):
+    def _on_disconnect(self, client, packet, exc=None):
         logger.info("MQTT disconnected")
         if exc:
             logger.error("Disconnect error: %s", exc)
@@ -322,7 +315,7 @@ class MQTTTelegrafWriter(TelegrafWriter):
 
 def create_telegraf_writer() -> TelegrafWriter:
     """Factory function to create the appropriate TelegrafWriter based on config."""
-    writer_type = config.telegraf.protocol.lower()
+    writer_type = get_config().telegraf.protocol.lower()
     if writer_type == "tcp":
         return TCPTelegrafWriter()
     elif writer_type == "execd":
@@ -332,5 +325,34 @@ def create_telegraf_writer() -> TelegrafWriter:
     return UDPTelegrafWriter()  # Default to UDP
 
 
-# Create a global instance
-telegraf = create_telegraf_writer()
+# The writer is created explicitly via ``init_telegraf()`` (from ``main()`` or
+# the test bootstrap) rather than at import time: constructing a writer reads the
+# app config, so an import-time instance would defeat the side-effect-free import.
+_writer: TelegrafWriter | None = None
+
+
+def init_telegraf() -> TelegrafWriter:
+    """Create the configured Telegraf writer and store it as the singleton."""
+    global _writer
+    _writer = create_telegraf_writer()
+    return _writer
+
+
+def get_telegraf() -> TelegrafWriter:
+    """Return the initialized Telegraf writer.
+
+    Raises:
+        RuntimeError: if ``init_telegraf()`` has not been called yet.
+    """
+    if _writer is None:
+        raise RuntimeError(
+            "Telegraf writer not initialized - call init_telegraf() first "
+            "(main() does this at startup)."
+        )
+    return _writer
+
+
+def reset_telegraf() -> None:
+    """Drop the created writer (test isolation helper)."""
+    global _writer
+    _writer = None

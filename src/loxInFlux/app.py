@@ -2,18 +2,20 @@ import asyncio
 import contextlib
 import signal
 import time
+from copy import deepcopy
 
 import orjson
 import uvloop
 from loxwebsocket.exceptions import LoxoneException
 from loxwebsocket.lox_ws_api import LoxWs, loxwebsocket
 
+from loxInFlux.argparser import get_args
 from loxInFlux.miniserver import getControlsFromConfigXML, load_miniserver_config
 
-from .config import config
+from .config import get_config, init_config
 from .grabber import LoxoneGrabber
 from .logger import get_lazy_logger, initialize_logging
-from .telegraf import telegraf
+from .telegraf import get_telegraf, init_telegraf
 from .utils import (
     _build_base_url,
     get_numeric_value_if_possible,
@@ -42,7 +44,8 @@ class LoxInfluxBridge:
         self.controls = {}
         self.ws_client_initialized = asyncio.Event()
         self.grabber_controls_updated = asyncio.Event()
-        self.formatter = f"{{:.{config.general.rounding_precision if config.general.round_floats else 15}f}}".format
+        cfg = get_config()
+        self.formatter = f"{{:.{cfg.general.rounding_precision if cfg.general.round_floats else 15}f}}".format
 
     async def handle_value_states(self, message, message_type):
         """Handler for value state messages (type 2)"""
@@ -58,7 +61,13 @@ class LoxInfluxBridge:
                         timestamp,
                     ]
                 )
-                asyncio.create_task(telegraf.write(point))
+                # Await the write instead of firing an untracked task: this
+                # gives natural backpressure (a slow writer throttles intake
+                # instead of piling up orphan tasks), avoids interleaved drains
+                # on the shared TCP writer, and ensures a failing write surfaces
+                # via the writer's own error handling rather than as a lost
+                # "task exception was never retrieved".
+                await get_telegraf().write(point)
             except KeyError:
                 if uuid in self.controls:
                     logger.warning(
@@ -73,7 +82,7 @@ class LoxInfluxBridge:
                             timestamp,
                         ]
                     )
-                    asyncio.create_task(telegraf.write(point))
+                    await get_telegraf().write(point)
                 else:
                     logger.debug(
                         "Omitting %s because it is not in the (websocket) controls list",
@@ -89,8 +98,14 @@ class LoxInfluxBridge:
             uuid, message = next(iter(message.items()))
             if uuid in self.grabber_controls:
                 control = self.grabber_controls[uuid]
+                # Work on a fresh copy of the per-control template Point:
+                # ``getControlsFromConfigXML`` is lru_cached and hands back the
+                # same object graph on every call, so mutating the stored
+                # ``pointInflux`` in place would (a) accumulate multi-output
+                # fields across messages and (b) poison the cache for other
+                # tasks. The grabber path is periodic, so the deepcopy is cheap.
                 point = (
-                    control["pointInflux"]
+                    deepcopy(control["pointInflux"])
                     .tag("source", "grabber")
                     .field("Default", get_numeric_value_if_possible(message["value"]))
                 )
@@ -107,7 +122,7 @@ class LoxInfluxBridge:
                                 ),
                                 get_numeric_value_if_possible(value.get("value")),
                             ).time(time.time_ns())
-                await telegraf.write(point.to_line_protocol().encode())
+                await get_telegraf().write(point.to_line_protocol().encode())
             else:
                 logger.warning(
                     "Omitting %s because it is not in the grabber controls list", uuid
@@ -116,7 +131,7 @@ class LoxInfluxBridge:
     async def main(self):
         # Initialize telegraf connection and gather controls
         await asyncio.gather(
-            telegraf.initialize(),
+            get_telegraf().initialize(),
             self.init_gather_controls_from_miniserver(),
             self.init_websocket_connection(),
             self.init_grabber(),
@@ -150,9 +165,10 @@ class LoxInfluxBridge:
         grabber_task.add_done_callback(self._tasks.discard)
 
     async def init_gather_controls_from_miniserver(self):
+        cfg = get_config()
         config_xml, loxapp3_json = await load_miniserver_config(
-            config.miniserver.user,
-            config.miniserver.password,
+            cfg.miniserver.user,
+            cfg.miniserver.password,
             persist=True,
         )
         self.loxapp3_json_control = [
@@ -161,12 +177,10 @@ class LoxInfluxBridge:
         new_controls, new_websocket_controls, new_grabber_controls = (
             getControlsFromConfigXML(config_xml)
         )
-        new_websocket_controls = config.control.websocket.filter_controls(
+        new_websocket_controls = cfg.control.websocket.filter_controls(
             new_websocket_controls
         )
-        new_grabber_controls = config.control.grabber.filter_controls(
-            new_grabber_controls
-        )
+        new_grabber_controls = cfg.control.grabber.filter_controls(new_grabber_controls)
         self.controls.clear()
         self.controls.update(new_controls)
         self.websocket_controls.clear()
@@ -185,11 +199,12 @@ class LoxInfluxBridge:
     async def init_websocket_connection(self):
         try:
             self.ws_client = loxwebsocket
+            cfg = get_config()
             await self.ws_client.connect(
-                user=config.miniserver.user,
-                password=config.miniserver.password,
+                user=cfg.miniserver.user,
+                password=cfg.miniserver.password,
                 loxone_url=self.base_url,
-                max_reconnect_attempts=config.miniserver.max_reconnect_attempts,
+                max_reconnect_attempts=cfg.miniserver.max_reconnect_attempts,
             )
             # Register callback for specific message types
             self.ws_client.add_message_callback(
@@ -211,21 +226,38 @@ class LoxInfluxBridge:
                 await self.ws_client.stop()
 
     async def shutdown(self):
-        """Cleanup method to be called on shutdown"""
+        """Cleanup method to be called on shutdown.
+
+        Idempotent and fault-tolerant: an exception while stopping the
+        websocket or closing telegraf must not abort the rest of the cleanup,
+        and calling this more than once is safe. Only the tasks the bridge
+        started itself (``self._tasks``) are cancelled - never every task on
+        the loop, which would also kill unrelated tasks and the supervisor.
+        """
         logger.info("Initiating shutdown...")
         self._shutdown_event.set()
 
         if self.ws_client:
-            await self.ws_client.stop()
-        await telegraf.close()
+            try:
+                await self.ws_client.stop()
+            except Exception as e:
+                logger.error("Error stopping websocket client: %s", e)
 
-        # Cancel all remaining tasks
-        tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+        try:
+            await get_telegraf().close()
+        except Exception as e:
+            logger.error("Error closing telegraf: %s", e)
+
+        # Cancel only the bridge-owned tasks (grabber, re-gather, ...); a bare
+        # ``asyncio.all_tasks()`` sweep would cancel unrelated tasks too.
+        current = asyncio.current_task()
+        tasks = [t for t in self._tasks if t is not current and not t.done()]
         for task in tasks:
             task.cancel()
 
-        logger.info("Waiting for %d tasks to complete...", len(tasks))
-        await asyncio.gather(*tasks, return_exceptions=True)
+        if tasks:
+            logger.info("Waiting for %d bridge task(s) to complete...", len(tasks))
+            await asyncio.gather(*tasks, return_exceptions=True)
         logger.info("Shutdown complete")
 
 
@@ -236,28 +268,43 @@ async def run_bridge(bridge):
         logger.info("Received shutdown signal")
         shutdown_event.set()
 
+    loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
-        asyncio.get_running_loop().add_signal_handler(sig, signal_handler)
+        loop.add_signal_handler(sig, signal_handler)
 
     # Start the bridge main task
     main_task = asyncio.create_task(bridge.main())
+    shutdown_wait = asyncio.create_task(shutdown_event.wait())
 
-    # Wait for shutdown signal
-    await shutdown_event.wait()
+    # Return as soon as EITHER a shutdown signal arrives OR main() finishes on
+    # its own. Waiting on the signal alone would hang forever if main() failed
+    # early (e.g. the websocket connection could never be established).
+    await asyncio.wait({main_task, shutdown_wait}, return_when=asyncio.FIRST_COMPLETED)
 
-    # Initiate shutdown
-    main_task.cancel()
+    shutdown_wait.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await shutdown_wait
+
+    # Signal-driven shutdown: main() is still running, cancel it cleanly. If
+    # main() already finished (early failure), re-await it to surface its
+    # exception - main() catches RuntimeError upstream and still runs cleanup.
+    if not main_task.done():
+        main_task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await main_task
 
 
 def main():
-    # Get command line arguments including config_dir and data_dir
-    initialize_logging()
+    # Explicitly wire the process singletons in dependency order: the config
+    # must be loaded before logging (level/format) and before the Telegraf
+    # writer (protocol) are constructed. Nothing is initialized at import time.
+    init_config()
+    initialize_logging(get_args().log_level)
 
     # Emit the runtime environment banner once, right after logging is set up.
     log_runtime_environment()
 
+    init_telegraf()
     bridge = LoxInfluxBridge()
 
     # Set uvloop as the default event loop policy

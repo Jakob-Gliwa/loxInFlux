@@ -3,7 +3,7 @@ from collections.abc import Callable
 
 from loxwebsocket.lox_ws_api import loxwebsocket
 
-from .config import config
+from .config import get_config
 from .logger import get_lazy_logger
 
 logger = get_lazy_logger(__name__)
@@ -18,24 +18,29 @@ class LoxoneGrabber:
         self.ws_client = loxwebsocket
         self.controlGetter = controls_getter
         """Start the grabber task."""
-        if not config.general.grabber:
+        cfg = get_config()
+        if not cfg.general.grabber:
             logger.info("Grabber ist in der Konfiguration deaktiviert")
             return
 
         logger.info(
             "Starte Loxone Grabber mit Intervall: %d Sekunden",
-            config.general.grabber_interval,
+            cfg.general.grabber_interval,
         )
 
         while not self._shutdown_event.is_set():
             try:
                 await self._grab_all_values()
-                await asyncio.sleep(config.general.grabber_interval)
+                await asyncio.sleep(get_config().general.grabber_interval)
             except Exception as e:
                 logger.error("Fehler in der Grabber-Schleife: %s", str(e))
                 await asyncio.sleep(5)  # Warte etwas bevor erneut versucht wird
 
     async def send_command(self, uuid, secured=False):
+        # loxwebsocket decodes bytes UUIDs on the unsecured path but interpolates
+        # them verbatim on the secured path (sending b'uuid'). Decode once here so
+        # both branches receive a plain str UUID.
+        uuid = uuid.decode() if isinstance(uuid, bytes) else uuid
         # Begrenze die gleichzeitigen Aufgaben
         async with self.semaphore:
             if self._shutdown_event.is_set():
@@ -45,8 +50,8 @@ class LoxoneGrabber:
                 if not secured:
                     await self.ws_client.send_websocket_command(uuid, "all")
                 else:
-                    await self.ws_client.send_command_to_visu_password_secured_control(
-                        uuid, "all", config.miniserver.visu_password
+                    await self.ws_client.send_websocket_command_to_visu_password_secured_control(
+                        uuid, "all", get_config().miniserver.visu_password
                     )
                 logger.debug("Grabber-Befehl für UUID gesendet: %s", uuid)
             except Exception as e:
