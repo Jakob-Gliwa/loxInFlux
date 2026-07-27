@@ -31,42 +31,104 @@ jobs:
   # --- TEST STAGE ---
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Check out source
         uses: actions/checkout@v6
 
-      # setup-uv installs uv, manages the Python toolchain (per requires-python)
-      # and persists uv's real cache (~/.cache/uv) across runs out of the box.
+      # setup-uv installs uv, manages the Python toolchain (pinned to 3.14) and
+      # persists uv's real cache (~/.cache/uv) across runs out of the box.
       - name: Install uv (with cache)
         uses: astral-sh/setup-uv@v8.2.0
         with:
           enable-cache: true
+          python-version: "3.14"
 
-      - name: Sync dependencies (incl. dev extras)
-        run: uv sync --locked --extra dev
+      - name: Sync dependencies (incl. dev group)
+        run: uv sync --locked
 
-      # Ruff lint gate (hard): fail the build on any lint finding or formatting drift.
+      # Ruff lint gate (hard): fail the build on any lint finding or formatting
+      # drift across BOTH production source and the test-suite.
       - name: Lint (ruff)
         run: |
-          uv run ruff check src
-          uv run ruff format --check src
+          uv run ruff check src tests
+          uv run ruff format --check src tests
 
-      # Tolerate "no tests collected" (pytest exit code 5) so CI stays green
-      # until a tests/ suite exists, while still failing on real test failures.
-      - name: Run tests
+      # Hard test + coverage gate: the build FAILS on any test failure or if
+      # total coverage drops below the --cov-fail-under floor. Coverage flags
+      # live here (not in pyproject addopts) so targeted local runs don't trip
+      # the gate. Live tests are excluded (they need real Miniserver creds).
+      - name: Run tests (with coverage gate)
+        run: >
+          uv run pytest -m "not live"
+          --cov=loxInFlux
+          --cov-report=term-missing
+          --cov-report=xml
+          --cov-fail-under=88
+
+  # --- PACKAGE SMOKE (build a wheel, install it clean, import + CLI) ---
+  package-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install uv (with cache)
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
+          python-version: "3.14"
+
+      - name: Build sdist + wheel
+        run: uv build
+
+      # Install the freshly built wheel into a throwaway venv (no editable/src
+      # path) and prove the packaged distribution imports and exposes its CLI.
+      - name: Install wheel into a fresh venv and smoke-test
         run: |
-          set +e
-          uv run pytest
-          code=$?
-          if [ "$code" -eq 5 ]; then
-            echo "::warning::No tests collected — skipping."
-            exit 0
-          fi
-          exit $code
+          set -euo pipefail
+          uv venv /tmp/smoke-venv --python 3.14
+          wheel="$(ls dist/*.whl)"
+          uv pip install --python /tmp/smoke-venv "$wheel"
+          /tmp/smoke-venv/bin/python -c "import loxInFlux; print(loxInFlux.__version__)"
+          /tmp/smoke-venv/bin/loxInFlux --help
+
+  # --- ARM SMOKE (import + parser smoke on native arm64) ---
+  arm-smoke:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install uv (with cache)
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
+          python-version: "3.14"
+
+      - name: Sync dependencies
+        run: uv sync --locked
+
+      # The Docker build produces an arm64 image but never runs the Python code
+      # there. This job imports the package and exercises the XML parser on a
+      # trivial config so arch-specific deps (lxml/lz4/pygixml) are proven to
+      # import and parse on native arm64.
+      - name: Import + parser smoke
+        run: >
+          uv run python -c "import loxInFlux;
+          from loxInFlux.miniserver import getControlsFromConfigXML;
+          xml = '<Structure><C Type=\"InfoOnlyAnalog\" uuidAction=\"0f-smoke\" Title=\"T\"/></Structure>';
+          controls, ws, grab = getControlsFromConfigXML(xml);
+          print('parsed controls:', len(controls))"
 
   # --- BUILD STAGE (one native runner per platform, no QEMU) ---
   build:
-    needs: test
+    # Gate the image on ALL validation jobs, not just unit tests: otherwise the
+    # experimental image could be pushed on main while package-smoke/arm-smoke
+    # are red (they have no dependency edge to build/merge on their own).
+    needs: [test, package-smoke, arm-smoke]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
