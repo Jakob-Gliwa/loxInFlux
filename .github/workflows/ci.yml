@@ -1,0 +1,269 @@
+name: CI (Build, Test & Experimental)
+
+# Validation + experimental channel:
+#   * pull_request      -> test + multi-arch build ONLY (never pushes)
+#   * push to main /
+#     workflow_dispatch -> test + build + push the experimental image
+#                          (:experimental and :experimental-<sha>)
+#
+# Versioned releases (0.2.0, 0.2, latest) are published exclusively by
+# release.yml when a GitHub Release is published.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+
+# Cancel superseded runs on the same ref to save runner minutes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: ${{ vars.DOCKER_USERNAME }}/loxinflux
+
+jobs:
+  # --- TEST STAGE ---
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      # setup-uv installs uv, manages the Python toolchain (pinned to 3.14) and
+      # persists uv's real cache (~/.cache/uv) across runs out of the box.
+      - name: Install uv (with cache)
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
+          python-version: "3.14"
+
+      - name: Sync dependencies (incl. dev group)
+        run: uv sync --locked
+
+      # Ruff lint gate (hard): fail the build on any lint finding or formatting
+      # drift across BOTH production source and the test-suite.
+      - name: Lint (ruff)
+        run: |
+          uv run ruff check src tests
+          uv run ruff format --check src tests
+
+      # Hard test + coverage gate: the build FAILS on any test failure or if
+      # total coverage drops below the --cov-fail-under floor. Coverage flags
+      # live here (not in pyproject addopts) so targeted local runs don't trip
+      # the gate. Live tests are excluded (they need real Miniserver creds).
+      - name: Run tests (with coverage gate)
+        run: >
+          uv run pytest -m "not live"
+          --cov=loxInFlux
+          --cov-report=term-missing
+          --cov-report=xml
+          --cov-fail-under=88
+
+  # --- PACKAGE SMOKE (build a wheel, install it clean, import + CLI) ---
+  package-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install uv (with cache)
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
+          python-version: "3.14"
+
+      - name: Build sdist + wheel
+        run: uv build
+
+      # Install the freshly built wheel into a throwaway venv (no editable/src
+      # path) and prove the packaged distribution imports and exposes its CLI.
+      - name: Install wheel into a fresh venv and smoke-test
+        run: |
+          set -euo pipefail
+          uv venv /tmp/smoke-venv --python 3.14
+          wheel="$(ls dist/*.whl)"
+          uv pip install --python /tmp/smoke-venv "$wheel"
+          /tmp/smoke-venv/bin/python -c "import loxInFlux; print(loxInFlux.__version__)"
+          /tmp/smoke-venv/bin/loxInFlux --help
+
+  # --- ARM SMOKE (import + parser smoke on native arm64) ---
+  arm-smoke:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install uv (with cache)
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
+          python-version: "3.14"
+
+      - name: Sync dependencies
+        run: uv sync --locked
+
+      # The Docker build produces an arm64 image but never runs the Python code
+      # there, so prove the arch-specific deps (lxml/lz4/pygixml) import AND work
+      # on native arm64. pygixml_active() resolves the CPU probe (the probe is
+      # lazy, so reading ACTIVE_XML_PARSER straight after the import would only
+      # report the un-resolved lxml baseline) and needs no config.
+      - name: Report XML parser selection
+        run: >
+          uv run python -c "from loxInFlux import miniserver;
+          miniserver.pygixml_active();
+          print('parser:', miniserver.ACTIVE_XML_PARSER, '-', miniserver.XML_PARSER_REASON)"
+
+      # Run the real suite instead of a hand-written parser snippet. The snippet
+      # this replaces duplicated the app's startup bootstrap and broke the moment
+      # the config singleton became explicit (get_config() now requires
+      # init_config(), and config.toml is not in the repo). pytest's conftest owns
+      # that bootstrap, so this cannot drift from the API again.
+      - name: Run tests on native arm64
+        run: uv run pytest -m "not live" -q
+
+  # --- BUILD STAGE (one native runner per platform, no QEMU) ---
+  build:
+    # Gate the image on ALL validation jobs, not just unit tests: otherwise the
+    # experimental image could be pushed on main while package-smoke/arm-smoke
+    # are red (they have no dependency edge to build/merge on their own).
+    needs: [test, package-smoke, arm-smoke]
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Prepare platform pair
+        run: echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
+        env:
+          platform: ${{ matrix.platform }}
+
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      # Only authenticate when we are actually going to push (not on PRs).
+      - name: Log in to Docker Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # PR: build only, prove it compiles on this platform, never push.
+      - name: Build image (PR validation, no push)
+        if: github.event_name == 'pull_request'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          push: false
+          cache-from: type=gha,scope=${{ env.PLATFORM_PAIR }}
+          cache-to: type=gha,mode=max,scope=${{ env.PLATFORM_PAIR }}
+
+      # main / manual dispatch: push each platform by digest for the manifest.
+      - name: Build and push by digest (experimental)
+        id: build
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true,oci-mediatypes=true
+          provenance: true
+          sbom: true
+          cache-from: type=gha,scope=${{ env.PLATFORM_PAIR }}
+          cache-to: type=gha,mode=max,scope=${{ env.PLATFORM_PAIR }}
+
+      - name: Export digest
+        if: github.event_name != 'pull_request'
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # --- MERGE STAGE (assemble the experimental multi-arch manifest) ---
+  merge:
+    needs: build
+    # Skip entirely on PRs — nothing was pushed to merge.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v7
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Extract Docker image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: index
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          # Moving :experimental plus an immutable :experimental-<short-sha>
+          # you can pin and try out.
+          tags: |
+            type=raw,value=experimental
+            type=sha,prefix=experimental-,format=short
+
+      - name: Log in to Docker Registry
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          set -euo pipefail
+          mapfile -t TAG_ARGS < <(jq -r '.tags[] | "-t\n" + .' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          mapfile -t ANN_ARGS < <(jq -r '.annotations[]? | "--annotation\n" + .' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          if [ "${#TAG_ARGS[@]}" -eq 0 ]; then
+            echo "No tags resolved. Nothing to push." >&2
+            exit 1
+          fi
+          SOURCES=()
+          for digest in *; do
+            SOURCES+=("${IMAGE_NAME}@sha256:${digest}")
+          done
+          docker buildx imagetools create "${TAG_ARGS[@]}" "${ANN_ARGS[@]}" "${SOURCES[@]}"
+        env:
+          DOCKER_METADATA_OUTPUT_JSON: ${{ steps.meta.outputs.json }}
+
+      - name: Inspect image
+        run: |
+          set -euo pipefail
+          first_tag=$(jq -r '.tags[0]' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          docker buildx imagetools inspect "$first_tag"
+        env:
+          DOCKER_METADATA_OUTPUT_JSON: ${{ steps.meta.outputs.json }}

@@ -1,0 +1,313 @@
+name: Release (Publish to Docker Hub)
+
+# The ONLY workflow that pushes to Docker Hub. Triggered when a GitHub Release
+# is published; the image version is derived from the release's (semver) tag,
+# e.g. tag "v0.2.0" -> image tags 0.2.0, 0.2, latest.
+
+on:
+  release:
+    types: [published]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: ${{ vars.DOCKER_USERNAME }}/loxinflux
+
+jobs:
+  # --- TEST STAGE (gate the release on green tests) ---
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install uv (with cache)
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
+          python-version: "3.14"
+
+      - name: Sync dependencies (incl. dev group)
+        run: uv sync --locked
+
+      # Ruff lint gate (hard): fail the release on any lint finding or formatting
+      # drift across BOTH production source and the test-suite (mirrors ci.yml).
+      - name: Lint (ruff)
+        run: |
+          uv run ruff check src tests
+          uv run ruff format --check src tests
+
+      # Hard test + coverage gate: the release FAILS on any test failure or if
+      # total coverage drops below the --cov-fail-under floor. Coverage flags
+      # live here (not in pyproject addopts). Live tests are excluded (they need
+      # real Miniserver credentials).
+      - name: Run tests (with coverage gate)
+        run: >
+          uv run pytest -m "not live"
+          --cov=loxInFlux
+          --cov-report=term-missing
+          --cov-report=xml
+          --cov-fail-under=88
+
+  # --- VERSION GATE (git tag must match pyproject + __version__) ---
+  # The image tags are derived from the release's git tag via type=semver in the
+  # merge stage. If someone tags v0.3.0 but forgets to bump the code, the image
+  # would advertise 0.3.0 while shipping 0.2.0. Fail the release loudly instead.
+  version-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install uv (with cache)
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
+          python-version: "3.14"
+
+      - name: Sync dependencies
+        run: uv sync --locked
+
+      - name: Assert release tag == pyproject.version == __version__
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          tag="${RELEASE_TAG#v}"
+          proj="$(uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+          pkg="$(uv run python -c "import loxInFlux; print(loxInFlux.__version__)")"
+          echo "release tag='${tag}'  pyproject='${proj}'  __version__='${pkg}'"
+          if [ "$tag" != "$proj" ] || [ "$tag" != "$pkg" ]; then
+            echo "::error::Version mismatch — release tag '${tag}', pyproject '${proj}' and __version__ '${pkg}' must all be identical." >&2
+            exit 1
+          fi
+
+  # --- PACKAGE SMOKE (build a wheel, install it clean, import + CLI) ---
+  # Mirrors ci.yml so a release is gated on the exact same validation as main.
+  package-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install uv (with cache)
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
+          python-version: "3.14"
+
+      - name: Build sdist + wheel
+        run: uv build
+
+      - name: Install wheel into a fresh venv and smoke-test
+        run: |
+          set -euo pipefail
+          uv venv /tmp/smoke-venv --python 3.14
+          wheel="$(ls dist/*.whl)"
+          uv pip install --python /tmp/smoke-venv "$wheel"
+          /tmp/smoke-venv/bin/python -c "import loxInFlux; print(loxInFlux.__version__)"
+          /tmp/smoke-venv/bin/loxInFlux --help
+
+  # --- ARM SMOKE (import + parser smoke on native arm64) ---
+  arm-smoke:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install uv (with cache)
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
+          python-version: "3.14"
+
+      - name: Sync dependencies
+        run: uv sync --locked
+
+      # Mirrors ci.yml: prove the arch-specific deps (lxml/lz4/pygixml) import and
+      # work on native arm64 before the release image is published.
+      - name: Report XML parser selection
+        run: >
+          uv run python -c "from loxInFlux import miniserver;
+          miniserver.pygixml_active();
+          print('parser:', miniserver.ACTIVE_XML_PARSER, '-', miniserver.XML_PARSER_REASON)"
+
+      - name: Run tests on native arm64
+        run: uv run pytest -m "not live" -q
+
+  # --- BUILD STAGE (one native runner per platform, no QEMU) ---
+  build:
+    # Gate the published image on ALL validation jobs (tests, version parity and
+    # both smokes) — not just unit tests — so a red smoke/version mismatch can't
+    # still ship a Docker image on release.
+    needs: [test, version-check, package-smoke, arm-smoke]
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Prepare platform pair
+        run: echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
+        env:
+          platform: ${{ matrix.platform }}
+
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Extract Docker image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_NAME }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Docker Registry
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true,oci-mediatypes=true
+          provenance: true
+          sbom: true
+          cache-from: type=gha,scope=${{ env.PLATFORM_PAIR }}
+          cache-to: type=gha,mode=max,scope=${{ env.PLATFORM_PAIR }}
+
+      - name: Export digest
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v7
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # --- MERGE STAGE (assemble the multi-arch manifest, tag & push) ---
+  merge:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v7
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Extract Docker image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: index
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          # latest=auto (the default, made explicit here): the moving :latest tag
+          # is emitted ONLY for a stable semver. Combined with type=semver, which
+          # itself suppresses the :{{major}}.{{minor}} partial on prereleases, a
+          # prerelease tag (e.g. v0.3.0-rc1) publishes just its own immutable
+          # :0.3.0-rc1 and never clobbers :latest or :0.3. (Replaces the previous
+          # unconditional type=raw,value=latest, which moved :latest even for a
+          # prerelease.)
+          flavor: |
+            latest=auto
+          # Derived from the release tag (refs/tags/<tag>). A stable tag like
+          # "v0.2.0" yields 0.2.0, 0.2 and latest.
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Log in to Docker Registry
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          set -euo pipefail
+          mapfile -t TAG_ARGS < <(jq -r '.tags[] | "-t\n" + .' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          mapfile -t ANN_ARGS < <(jq -r '.annotations[]? | "--annotation\n" + .' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          if [ "${#TAG_ARGS[@]}" -eq 0 ]; then
+            echo "No tags resolved. Nothing to push." >&2
+            exit 1
+          fi
+          SOURCES=()
+          for digest in *; do
+            SOURCES+=("${IMAGE_NAME}@sha256:${digest}")
+          done
+          docker buildx imagetools create "${TAG_ARGS[@]}" "${ANN_ARGS[@]}" "${SOURCES[@]}"
+        env:
+          DOCKER_METADATA_OUTPUT_JSON: ${{ steps.meta.outputs.json }}
+
+      - name: Inspect image
+        run: |
+          set -euo pipefail
+          first_tag=$(jq -r '.tags[0]' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          docker buildx imagetools inspect "$first_tag"
+        env:
+          DOCKER_METADATA_OUTPUT_JSON: ${{ steps.meta.outputs.json }}
+
+  # --- RETRACT ON FAILURE (best-effort un-publish) ---
+  # A release:[published] trigger means the GitHub Release is already public
+  # BEFORE any gate runs. If validation, the image build or the manifest push
+  # fails, convert the release back to a draft so a broken or image-less release
+  # is not left visible. This narrows — but cannot fully close — the public
+  # window; the tag-driven "create the release last" model would close it.
+  retract-on-failure:
+    needs: [test, version-check, package-smoke, arm-smoke, build, merge]
+    # Run only when something upstream actually failed or was cancelled.
+    if: >-
+      always()
+      && (contains(needs.*.result, 'failure')
+          || contains(needs.*.result, 'cancelled'))
+    runs-on: ubuntu-latest
+    # Least privilege: only this job may write repo contents (edit the release).
+    permissions:
+      contents: write
+    steps:
+      - name: Convert release back to draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ github.event.release.id }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          echo "::warning::A release gate failed — retracting release '${RELEASE_TAG}' (id ${RELEASE_ID}) back to draft."
+          gh api \
+            --method PATCH \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+            -F draft=true

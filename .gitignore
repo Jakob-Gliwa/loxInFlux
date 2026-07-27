@@ -1,14 +1,30 @@
 .vscode/
 .venv/
 Recherche/
-src/loxInFlux/__pycache__/
-src/loxwebsocket/__pycache__/
-uv.lock
 config_sps_0250_20241229211340.xml
 .DS_Store
 data/
 config/config.toml
 profile_results.html
+# Local-only performance/parity benchmarks (not part of the shipped package)
+benchmarks/
+
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+
+# Test, coverage and tooling caches (generated)
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Packaging / build artifacts
+*.egg-info/
+dist/
 src/loxwebsocket/build/lib.macosx-14.0-arm64-cpython-313/extractor.cpython-313-darwin.so
 src/loxwebsocket/build/temp.macosx-14.0-arm64-cpython-313/extractor.o
 src/loxwebsocket/cython_modules/build/lib.macosx-14.0-arm64-cpython-313/extractor.cpython-313-darwin.so
