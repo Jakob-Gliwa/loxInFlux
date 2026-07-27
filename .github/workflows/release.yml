@@ -133,13 +133,15 @@ jobs:
       - name: Sync dependencies
         run: uv sync --locked
 
-      - name: Import + parser smoke
+      # Mirrors ci.yml: prove the arch-specific deps (lxml/lz4/pygixml) import and
+      # work on native arm64 before the release image is published.
+      - name: Report XML parser selection
         run: >
-          uv run python -c "import loxInFlux;
-          from loxInFlux.miniserver import getControlsFromConfigXML;
-          xml = '<Structure><C Type=\"InfoOnlyAnalog\" uuidAction=\"0f-smoke\" Title=\"T\"/></Structure>';
-          controls, ws, grab = getControlsFromConfigXML(xml);
-          print('parsed controls:', len(controls))"
+          uv run python -c "from loxInFlux import miniserver;
+          print('parser:', miniserver.ACTIVE_XML_PARSER, '-', miniserver.XML_PARSER_REASON)"
+
+      - name: Run tests on native arm64
+        run: uv run pytest -m "not live" -q
 
   # --- BUILD STAGE (one native runner per platform, no QEMU) ---
   build:

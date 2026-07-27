@@ -112,16 +112,21 @@ jobs:
         run: uv sync --locked
 
       # The Docker build produces an arm64 image but never runs the Python code
-      # there. This job imports the package and exercises the XML parser on a
-      # trivial config so arch-specific deps (lxml/lz4/pygixml) are proven to
-      # import and parse on native arm64.
-      - name: Import + parser smoke
+      # there, so prove the arch-specific deps (lxml/lz4/pygixml) import AND work
+      # on native arm64. Importing miniserver runs the pygixml CPU probe and needs
+      # no config, so this also records which parser this architecture selected.
+      - name: Report XML parser selection
         run: >
-          uv run python -c "import loxInFlux;
-          from loxInFlux.miniserver import getControlsFromConfigXML;
-          xml = '<Structure><C Type=\"InfoOnlyAnalog\" uuidAction=\"0f-smoke\" Title=\"T\"/></Structure>';
-          controls, ws, grab = getControlsFromConfigXML(xml);
-          print('parsed controls:', len(controls))"
+          uv run python -c "from loxInFlux import miniserver;
+          print('parser:', miniserver.ACTIVE_XML_PARSER, '-', miniserver.XML_PARSER_REASON)"
+
+      # Run the real suite instead of a hand-written parser snippet. The snippet
+      # this replaces duplicated the app's startup bootstrap and broke the moment
+      # the config singleton became explicit (get_config() now requires
+      # init_config(), and config.toml is not in the repo). pytest's conftest owns
+      # that bootstrap, so this cannot drift from the API again.
+      - name: Run tests on native arm64
+        run: uv run pytest -m "not live" -q
 
   # --- BUILD STAGE (one native runner per platform, no QEMU) ---
   build:
