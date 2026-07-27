@@ -97,7 +97,29 @@ def _select_newest_config_file(listing: str) -> str | None:
 # logs, and ``import loxInFlux`` must stay free of side effects. It is resolved
 # on first need instead (startup banner or first parse) - see _ensure_pygixml.
 # ---------------------------------------------------------------------------
-_PYGIXML_PROBE = "import pygixml; pygixml.XPathQuery('//C')"
+# The probe must REHEARSE the real traversal, not merely import the module. A
+# CPU can execute pygixml's import and a trivial location path and still lack an
+# instruction used elsewhere: observed on GitHub's amd64 runners, where
+# "import pygixml; pygixml.XPathQuery('//C')" succeeded but the suite then died
+# with SIGILL inside pugi::impl::xpath_parser::parse_expression_rec - i.e. while
+# compiling a *predicate*, which '//C' does not have. So the probe compiles both
+# expressions extractControls actually uses and touches every accessor
+# _PygixmlBackend calls. Keep this in sync with _PygixmlBackend; a "simplified"
+# probe silently re-opens the SIGILL hole it exists to close.
+_PYGIXML_PROBE = """\
+import pygixml
+
+doc = pygixml.parse_string(
+    '<S><C Type="Place" U="u"><IoData Cr="c" Pr="p" Visu="1"/><Co K="k" U="cu"/></C></S>'
+)
+root = doc.root
+nodes = root.select_nodes('.//C[@Type]')
+root.select_nodes('.//C[@Type="Category" or @Type="Place"]')
+node = nodes[0].node
+node.attribute("Type").value
+node.child("IoData").is_null()
+[child.name for child in node.children()]
+"""
 
 # pygixml is the preferred (default) parser; lxml is only the fallback. We start
 # from the lxml baseline and upgrade to pygixml iff the CPU probe AND the import

@@ -113,11 +113,13 @@ jobs:
 
       # The Docker build produces an arm64 image but never runs the Python code
       # there, so prove the arch-specific deps (lxml/lz4/pygixml) import AND work
-      # on native arm64. Importing miniserver runs the pygixml CPU probe and needs
-      # no config, so this also records which parser this architecture selected.
+      # on native arm64. pygixml_active() resolves the CPU probe (the probe is
+      # lazy, so reading ACTIVE_XML_PARSER straight after the import would only
+      # report the un-resolved lxml baseline) and needs no config.
       - name: Report XML parser selection
         run: >
           uv run python -c "from loxInFlux import miniserver;
+          miniserver.pygixml_active();
           print('parser:', miniserver.ACTIVE_XML_PARSER, '-', miniserver.XML_PARSER_REASON)"
 
       # Run the real suite instead of a hand-written parser snippet. The snippet

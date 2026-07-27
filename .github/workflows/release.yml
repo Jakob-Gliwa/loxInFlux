@@ -138,6 +138,7 @@ jobs:
       - name: Report XML parser selection
         run: >
           uv run python -c "from loxInFlux import miniserver;
+          miniserver.pygixml_active();
           print('parser:', miniserver.ACTIVE_XML_PARSER, '-', miniserver.XML_PARSER_REASON)"
 
       - name: Run tests on native arm64

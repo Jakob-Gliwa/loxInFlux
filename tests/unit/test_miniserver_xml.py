@@ -13,6 +13,7 @@ REGRESSIONS exercised here:
 
 from __future__ import annotations
 
+import inspect
 import sys
 
 import pytest
@@ -504,3 +505,55 @@ def test_parser_parity_pygixml_vs_forced_lxml_with_linkc_promotion(monkeypatch):
     # ... and full bucket membership + payloads match byte-for-byte.
     assert [set(b) for b in fast] == [set(b) for b in slow]
     assert fast == slow
+
+
+# --------------------------------------------------------------------------- #
+# REGRESSION: the SIGILL probe must rehearse the real traversal                #
+#                                                                             #
+# pygixml ships without runtime CPU dispatch, so the subprocess probe is the   #
+# only thing standing between an unsupported CPU and an uncatchable SIGILL.    #
+# A probe that merely imported pygixml and compiled '//C' passed on GitHub's   #
+# amd64 runners, which then died with exit 132 inside pugixml's *predicate*    #
+# parser - a path '//C' never reaches. These guards pin the invariant so a     #
+# future simplification fails here rather than in a release build.            #
+# --------------------------------------------------------------------------- #
+#: The XPath expressions ``_PygixmlBackend`` compiles at runtime.
+_BACKEND_XPATHS = (
+    ".//C[@Type]",
+    './/C[@Type="Category" or @Type="Place"]',
+)
+
+
+def test_pygixml_probe_is_valid_python():
+    """A syntax error in the probe would silently disable the fast path forever.
+
+    ``native_import_runs`` only reports a boolean, so a malformed probe is
+    indistinguishable from an unsupported CPU: pygixml would be skipped on every
+    machine with no visible error.
+    """
+    compile(_miniserver_mod._PYGIXML_PROBE, "<pygixml-probe>", "exec")
+
+
+@pytest.mark.parametrize("xpath", _BACKEND_XPATHS)
+def test_pygixml_probe_compiles_every_backend_xpath(xpath):
+    """Each XPath the backend uses must also be compiled by the probe."""
+    backend_src = inspect.getsource(_miniserver_mod._PygixmlBackend)
+    assert xpath in backend_src, (
+        f"_PygixmlBackend no longer uses {xpath!r}: update _BACKEND_XPATHS and "
+        "keep _PYGIXML_PROBE in sync with it"
+    )
+    assert xpath in _miniserver_mod._PYGIXML_PROBE, (
+        f"_PYGIXML_PROBE does not compile {xpath!r}, so a CPU that cannot execute "
+        "it would pass the probe and later die with SIGILL"
+    )
+
+
+def test_pygixml_probe_exercises_backend_accessors():
+    """The probe must touch the accessors the backend calls, not just XPath.
+
+    ``select_nodes`` alone would leave attribute/child/children traversal - each
+    of which enters different native code - unproven on the probing CPU.
+    """
+    probe = _miniserver_mod._PYGIXML_PROBE
+    for accessor in ("parse_string", "select_nodes", "attribute", "child", "children"):
+        assert accessor in probe, f"probe does not exercise {accessor!r}"
