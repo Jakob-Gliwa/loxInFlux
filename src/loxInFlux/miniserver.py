@@ -20,7 +20,7 @@ import orjson
 from influxdb_client import Point
 from lxml import etree as ET
 
-from loxInFlux.config import config
+from loxInFlux.config import get_config
 from loxInFlux.logger import get_lazy_logger
 from loxInFlux.utils import (
     _build_base_url,
@@ -35,8 +35,50 @@ _loxapp3_cache_json_last_modified = None
 
 # Matches the timestamped Loxone config archives in /prog, e.g.
 # "sps_0252_20260104121455.zip". There is no fixed-name pointer to the active
-# config, so we list the directory and pick the newest match.
-_CONFIG_FILE_PATTERN = re.compile(r"(sps_\d+_\d+\.(?:zip|LoxCC))")
+# config, so we list the directory and pick the newest match. The named groups
+# split the filename into its ``<ver>`` (config version) and ``<ts>`` (creation
+# timestamp) integers so selection can compare them numerically instead of by
+# the raw filename string (see ``_select_newest_config_file``).
+_CONFIG_FILE_PATTERN = re.compile(r"sps_(?P<ver>\d+)_(?P<ts>\d+)\.(?:zip|LoxCC)")
+
+# Magic bytes identifying the two payload shapes /dev/fsget/prog/ can return.
+# Since firmware 17 (verified on 17.1.6.30) /prog holds TWO files per program
+# state: the deployment ZIP from Loxone Config plus a bare ``.LoxCC`` container
+# that the Miniserver itself writes seconds later for the running program (e.g.
+# sps_0272_20260727223718.zip and sps_0272_20260727223721.LoxCC). The newest
+# entry is therefore usually the ``.LoxCC``, which is NOT a ZIP - feeding it to
+# zipfile fails with the misleading "File is not a zip file". So the payload
+# format is detected by content, never by the file extension.
+_LOXCC_MAGIC = 0xAABBCCEE
+_ZIP_MAGIC = b"PK"
+
+# Where to get LoxAPP3.json when the payload is a bare LoxCC container: that
+# holds only the program itself, whereas the ZIP ships the structure file as a
+# member. ``/data/LoxAPP3.json`` is the documented endpoint for the *running*
+# program's structure file, i.e. exactly what a bare ``.LoxCC`` corresponds to.
+_LOXAPP3_JSON_PATH = "data/LoxAPP3.json"
+
+
+def _select_newest_config_file(listing: str) -> str | None:
+    """Pick the newest ``sps_<ver>_<ts>.(zip|LoxCC)`` from a ``/prog`` listing.
+
+    Selection is by the trailing **timestamp** integer (tiebreak: version),
+    independent of the version prefix - NOT by a lexicographic sort of the raw
+    filename. A plain ``sorted(...)[-1]`` mis-orders across a version rollover
+    (``sps_10_...`` sorts before ``sps_9_...`` because ``"1" < "9"``) and on
+    unequal digit lengths (``"..._100" < "..._9"``), so it can silently pick a
+    stale archive. Parsing the integers fixes both.
+
+    Returns ``None`` when the listing contains no matching archive.
+    """
+    best_name: str | None = None
+    best_key: tuple[int, int] | None = None
+    for match in _CONFIG_FILE_PATTERN.finditer(listing):
+        key = (int(match.group("ts")), int(match.group("ver")))
+        if best_key is None or key > best_key:
+            best_key = key
+            best_name = match.group(0)
+    return best_name
 
 
 # ---------------------------------------------------------------------------
@@ -50,6 +92,10 @@ _CONFIG_FILE_PATTERN = re.compile(r"(sps_\d+_\d+\.(?:zip|LoxCC))")
 # is absent - we fall back to lxml. The strict pygixml parse additionally falls
 # back to lxml's recover=True path for malformed configs. ACTIVE_XML_PARSER /
 # XML_PARSER_REASON are reported once at startup by utils.log_runtime_environment().
+#
+# The probe is deliberately NOT run at import time: it spawns a subprocess and
+# logs, and ``import loxInFlux`` must stay free of side effects. It is resolved
+# on first need instead (startup banner or first parse) - see _ensure_pygixml.
 # ---------------------------------------------------------------------------
 _PYGIXML_PROBE = "import pygixml; pygixml.XPathQuery('//C')"
 
@@ -62,20 +108,46 @@ _PYGIXML_AVAILABLE = False
 ACTIVE_XML_PARSER = "lxml"
 XML_PARSER_REASON = "pygixml load probe failed (would SIGILL/import error); using lxml"
 
-if native_import_runs(_PYGIXML_PROBE):
-    # Breadcrumb: the probe passed, so the in-process import below is safe on
-    # this CPU. Logging it leaves a traceable last line should a hard crash
-    # (e.g. SIGILL) ever slip through despite the probe.
-    logger.info("pygixml load probe passed; importing pygixml ...")
-    try:
-        import pygixml
-        from pygixml import PygiXMLError
+#: Whether the probe below has already decided the backend (probe runs once).
+_pygixml_resolved = False
 
-        _PYGIXML_AVAILABLE = True
-        ACTIVE_XML_PARSER = "pygixml"
-        XML_PARSER_REASON = "fast path (load probe passed)"
-    except Exception as e:  # pragma: no cover - platform dependent
-        XML_PARSER_REASON = f"pygixml import failed: {e}"
+
+def _ensure_pygixml() -> None:
+    """Resolve the XML backend once: probe, then upgrade to pygixml if safe.
+
+    Idempotent - guarded by ``_pygixml_resolved`` - so the subprocess probe runs
+    at most once and a caller that has deliberately forced the lxml fallback
+    (e.g. a test setting ``_PYGIXML_AVAILABLE = False``) is never overridden.
+    """
+    global _pygixml_resolved, pygixml, PygiXMLError
+    global _PYGIXML_AVAILABLE, ACTIVE_XML_PARSER, XML_PARSER_REASON
+
+    if _pygixml_resolved:
+        return
+    _pygixml_resolved = True
+
+    if native_import_runs(_PYGIXML_PROBE):
+        # Breadcrumb: the probe passed, so the in-process import below is safe on
+        # this CPU. Logging it leaves a traceable last line should a hard crash
+        # (e.g. SIGILL) ever slip through despite the probe.
+        logger.info("pygixml load probe passed; importing pygixml ...")
+        try:
+            import pygixml as _pygixml_mod
+            from pygixml import PygiXMLError as _PygiXMLError
+
+            pygixml = _pygixml_mod
+            PygiXMLError = _PygiXMLError
+            _PYGIXML_AVAILABLE = True
+            ACTIVE_XML_PARSER = "pygixml"
+            XML_PARSER_REASON = "fast path (load probe passed)"
+        except Exception as e:  # pragma: no cover - platform dependent
+            XML_PARSER_REASON = f"pygixml import failed: {e}"
+
+
+def pygixml_active() -> bool:
+    """Whether pygixml is the active backend (resolving the probe if needed)."""
+    _ensure_pygixml()
+    return _PYGIXML_AVAILABLE
 
 
 def _is_lz4_frame(data: bytes) -> bool:
@@ -106,6 +178,76 @@ def _decompress_loxcc_block_lz4(data: bytes, uncompressed_size: int) -> bytes:
             raise ValueError(f"LZ4 decompression failed: {e}") from e
 
 
+def _read_loxcc_stream(stream) -> bytes:
+    """Read one LoxCC container from a binary stream, returning the config XML bytes.
+
+    Shared by both payload shapes - the ``sps0.LoxCC`` member inside the config
+    ZIP and a bare ``.LoxCC`` downloaded straight from ``/prog`` - so each one is
+    validated identically (header magic, declared payload length, crc32 over the
+    decompressed bytes, and uncompressed size).
+    """
+    (header,) = struct.unpack("<L", stream.read(4))
+    if header != _LOXCC_MAGIC:
+        raise Exception("Invalid file format")
+
+    (
+        compressedSize,
+        uncompressedSize,
+        checksum,
+    ) = struct.unpack("<LLL", stream.read(12))
+    data = stream.read(compressedSize)
+
+    # Strict payload length validation
+    if len(data) != compressedSize:
+        raise Exception(
+            f"Payload length mismatch: got {len(data)}, expected {compressedSize}"
+        )
+
+    # Decompress using LZ4 library (much faster than manual implementation)
+    logger.debug("Using LZ4 decompression")
+    resultStr = _decompress_loxcc_block_lz4(data, uncompressedSize)
+
+    if checksum != zlib.crc32(resultStr):
+        raise Exception("Checksum verification failed")
+
+    if len(resultStr) != uncompressedSize:
+        raise Exception(
+            f"Uncompressed filesize mismatch: {len(resultStr)} != {uncompressedSize}"
+        )
+    return resultStr
+
+
+def _decode_config_payload(raw: bytes) -> tuple[str, dict | None]:
+    """Decode a ``/dev/fsget/prog/`` payload into ``(config XML, LoxAPP3.json)``.
+
+    Dispatch is on the magic bytes rather than the filename, because since
+    firmware 17 the newest ``/prog`` entry is often the Miniserver's own
+    normalised ``.LoxCC`` copy of the running program instead of the deployment
+    ZIP (see ``_LOXCC_MAGIC``).
+
+    The second element is the parsed ``LoxAPP3.json`` when the payload was a ZIP
+    (which carries it as a member), or ``None`` for a bare LoxCC container - the
+    caller must then fetch the structure file separately.
+    """
+    if raw[:2] == _ZIP_MAGIC:
+        with zipfile.ZipFile(BytesIO(raw)) as zf:
+            with zf.open("sps0.LoxCC") as f:
+                config_content = _read_loxcc_stream(f).decode("utf-8")
+            with zf.open("LoxAPP3.json") as f:
+                return config_content, orjson.loads(f.read())
+
+    if len(raw) >= 4 and struct.unpack_from("<L", raw)[0] == _LOXCC_MAGIC:
+        return _read_loxcc_stream(BytesIO(raw)).decode("utf-8"), None
+
+    # Neither shape. The Miniserver answers a failed /dev/... request with HTTP
+    # 200 and an LL error body (e.g. code 403 when the user lacks full access),
+    # which raise_for_status() cannot detect. Surface the actual bytes instead of
+    # letting it surface later as a bogus zip/lz4 error.
+    raise Exception(
+        f"Unexpected configuration payload: {len(raw)} bytes starting with {raw[:32]!r}"
+    )
+
+
 valueplaceholder = b"[valueplaceholder]"
 sourceplaceholder = b"[sourceplaceholder]"
 
@@ -119,37 +261,6 @@ SYS_BLACKLIST = ["VIRTUALTEXTIN"]
 def remove_bom(xmlstr: str) -> str:
     BOM = "\ufeff"
     return xmlstr[len(BOM) :] if xmlstr.startswith(BOM) else xmlstr
-
-
-def correctXML_removeAttributeDuplicates(xmlstr: str, elemType: str) -> str:
-    startpos = 0
-    while True:
-        foundpos = xmlstr.find(f'<C Type="{elemType}"', startpos)
-        if foundpos == -1:
-            break
-        endpos = xmlstr.find(">", foundpos)
-        if endpos == -1:
-            break
-
-        tagstr = xmlstr[foundpos + 1 : endpos]
-        attributes = re.findall(r'(\S+="[^"]*"|\S+=[^"\s]+)', tagstr)
-        newattributeArray = []
-        seen = {}
-        for attrpair in attributes:
-            parts = attrpair.split("=", 1)
-            if len(parts) != 2:
-                continue
-            attrname = parts[0]
-            if attrname in seen:
-                continue
-            seen[attrname] = True
-            newattributeArray.append(attrpair)
-
-        if len(newattributeArray) < len(attributes):
-            fixed = " ".join(newattributeArray)
-            xmlstr = xmlstr[: foundpos + 1] + fixed + xmlstr[endpos:]
-        startpos = foundpos + 1
-    return xmlstr
 
 
 class _LxmlBackend:
@@ -219,7 +330,7 @@ def extractControls(root, lox_category_room: dict, backend) -> tuple[dict, dict,
     # Controls
     for obj in backend.controls(root):
         objtype = backend.get(obj, "Type", "")
-        if objtype.upper() in config.control.type_blacklist:
+        if objtype.upper() in get_config().control.type_blacklist:
             continue  # Blacklist -> überspringen
 
         uid = str(backend.get(obj, "U")).encode("utf-8")
@@ -345,11 +456,15 @@ def extractControls(root, lox_category_room: dict, backend) -> tuple[dict, dict,
             if is_visu_control:
                 visu_controls[co_uid] = controls[co_uid]
 
-        # Grabber needs only parent uuid
-        for uid in linkCofVisuControll:
-            if uid in non_visu_controls:
-                visu_controls[uid] = non_visu_controls[uid]
-                del non_visu_controls[uid]
+    # Controls linked from a visible control are implicitly visible too. Promote
+    # them exactly ONCE, after every control has been collected: only here are
+    # both linkCofVisuControll and non_visu_controls complete. (Previously this
+    # sat inside the for-obj loop, re-running per control on a partially filled
+    # set - O(N*M) wasted work with no effect on the final result.)
+    for link_uid in linkCofVisuControll:
+        if link_uid in non_visu_controls:
+            visu_controls[link_uid] = non_visu_controls[link_uid]
+            del non_visu_controls[link_uid]
     return controls, visu_controls, non_visu_controls
 
 
@@ -397,12 +512,18 @@ def _parse_lxml_root(xmlstr: str):
 @log_performance("getControlsFromConfigXML")
 def getControlsFromConfigXML(xmlstr: str):
     xmlstr = remove_bom(xmlstr)
-    xmlstr = correctXML_removeAttributeDuplicates(xmlstr, "(LoxAIR|LoxAIRDevice|User)")
+
+    # Resolve the backend on first parse (no-op afterwards); the probe is not run
+    # at import time.
+    _ensure_pygixml()
 
     # Fast path: strict pygixml parse + XPath traversal. On a strict-parse error
     # (structurally malformed XML) - or when pygixml is unavailable - fall back
     # to the lxml recover=True path, which yields identical output for the normal
-    # case and tolerates the malformed cases pygixml rejects.
+    # case and tolerates the malformed cases pygixml rejects. Duplicate attributes
+    # (historically seen on LoxAIR/LoxAIRDevice/User tags) need no pre-cleaning:
+    # pygixml tolerates them natively and the lxml fallback uses recover=True; both
+    # keep the first occurrence.
     if _PYGIXML_AVAILABLE:
         try:
             doc = pygixml.parse_string(xmlstr)
@@ -432,11 +553,19 @@ async def load_miniserver_config(
     Load the most recent version of the currently active configuration file
     and LoxAPP3.json from the Miniserver via the HTTP filesystem API.
 
-    Uses ``/dev/fslist/prog/`` to find the newest ``sps_<ver>_<ts>.zip`` archive
-    and ``/dev/fsget/prog/<file>`` to download it (both plain HTTP, BasicAuth).
-    This replaces the previous FTP path: it reuses the HTTP port we already talk
-    to, drops the aioftp dependency and keeps working when FTP is disabled on
-    the Miniserver.
+    Uses ``/dev/fslist/prog/`` to find the newest ``sps_<ver>_<ts>.(zip|LoxCC)``
+    entry and ``/dev/fsget/prog/<file>`` to download it (both plain HTTP,
+    BasicAuth). This replaces the previous FTP path: it reuses the HTTP port we
+    already talk to, drops the aioftp dependency and keeps working when FTP is
+    disabled on the Miniserver (the default since Loxone Config 16.1).
+
+    Both payload shapes are handled: the deployment ZIP (``sps0.LoxCC`` +
+    ``LoxAPP3.json``) and the bare ``.LoxCC`` container that firmware 17 writes
+    for the running program. For the latter, ``LoxAPP3.json`` is fetched from
+    ``/data/LoxAPP3.json`` because it is not part of the container.
+
+    Note that ``fslist``/``fsget`` require a Miniserver user with *full access*
+    rights - a different permission from the old FTP bit the previous path used.
 
     Returns:
         tuple[str, dict]: A tuple containing (config_content, loxapp3_json)
@@ -458,15 +587,16 @@ async def load_miniserver_config(
             remote_loxapp3_last_modified is not None
             and _loxapp3_cache_json_last_modified >= remote_loxapp3_last_modified
         ):
+            data_dir = get_config().paths.data_dir
             cached_files = [
                 f
-                for f in os.listdir(config.paths.data_dir)
+                for f in os.listdir(data_dir)
                 if f.startswith("sps_") and f.endswith(".xml")
             ]
             if cached_files:
                 latest_cache = sorted(cached_files)[-1]
-                cached_xml = os.path.join(config.paths.data_dir, latest_cache)
-                cached_json = os.path.join(config.paths.data_dir, "LoxAPP3.json")
+                cached_xml = os.path.join(data_dir, latest_cache)
+                cached_json = os.path.join(data_dir, "LoxAPP3.json")
 
                 # One-shot local filesystem checks during startup; the blocking
                 # cost is negligible and not worth async-wrapping the whole path.
@@ -494,9 +624,13 @@ async def load_miniserver_config(
 
         # Download the newest config archive via the HTTP filesystem API.
         base_url = _build_base_url()
-        auth = aiohttp.BasicAuth(login=username, password=password)
+        # aiohttp.BasicAuth is deprecated (removed in aiohttp 4.0); encode the
+        # credentials into a static Authorization header instead.
+        auth_header = aiohttp.encode_basic_auth(username, password)
         timeout = aiohttp.ClientTimeout(total=30)
-        async with aiohttp.ClientSession(auth=auth, timeout=timeout) as session:
+        async with aiohttp.ClientSession(
+            headers={"Authorization": auth_header}, timeout=timeout
+        ) as session:
             # List /prog (plain-text listing, one entry per line) and pick the
             # newest sps_<ver>_<ts>.(zip|LoxCC).
             async with session.get(
@@ -507,11 +641,10 @@ async def load_miniserver_config(
                 response.raise_for_status()
                 listing = await response.text()
 
-            filelist = sorted(set(_CONFIG_FILE_PATTERN.findall(listing)))
-            if not filelist:
+            filename = _select_newest_config_file(listing)
+            if filename is None:
                 raise Exception("No configuration files found")
 
-            filename = filelist[-1]
             logger.info("Selected configuration file: %s", filename)
 
             # Download the selected archive
@@ -523,52 +656,47 @@ async def load_miniserver_config(
                 response.raise_for_status()
                 raw = await response.read()
 
-        # Extract and decompress the configuration
-        download_file = BytesIO(raw)
-        zf = zipfile.ZipFile(download_file)
-        with zf.open("sps0.LoxCC") as f:
-            (header,) = struct.unpack("<L", f.read(4))
-            if header != 0xAABBCCEE:
-                raise Exception("Invalid file format")
+            # Extract and decompress the configuration. The payload is either the
+            # deployment ZIP or a bare LoxCC container; _decode_config_payload
+            # tells them apart by content (see its docstring).
+            config_content, json_content = _decode_config_payload(raw)
 
-            (
-                compressedSize,
-                uncompressedSize,
-                checksum,
-            ) = struct.unpack("<LLL", f.read(12))
-            data = f.read(compressedSize)
-
-            # Strict payload length validation
-            if len(data) != compressedSize:
-                raise Exception(
-                    f"Payload length mismatch: got {len(data)}, expected {compressedSize}"
+            # A bare LoxCC holds only the program, so LoxAPP3.json has to be
+            # fetched on its own - still inside this session, to reuse the
+            # connection and the Authorization header.
+            if json_content is None:
+                logger.info(
+                    "%s is a bare LoxCC container (no LoxAPP3.json member); "
+                    "fetching /%s separately",
+                    filename,
+                    _LOXAPP3_JSON_PATH,
                 )
+                async with session.get(
+                    f"{base_url}/{_LOXAPP3_JSON_PATH}",
+                    allow_redirects=True,
+                    ssl=False,  # Disable SSL verification
+                ) as response:
+                    response.raise_for_status()
+                    json_content = orjson.loads(await response.read())
 
-            # Decompress using LZ4 library (much faster than manual implementation)
-            logger.debug("Using LZ4 decompression")
-            resultStr = _decompress_loxcc_block_lz4(data, uncompressedSize)
-
-            if checksum != zlib.crc32(resultStr):
-                raise Exception("Checksum verification failed")
-
-            if len(resultStr) != uncompressedSize:
-                raise Exception(
-                    f"Uncompressed filesize mismatch: {len(resultStr)} != {uncompressedSize}"
-                )
-
-            config_content = resultStr.decode("utf-8")
-
-        # Get the LoxAPP3.json content
-        with zf.open("LoxAPP3.json") as f:
-            json_content = orjson.loads(f.read())
+        # Guard the same HTTP-200-with-LL-error-body trap as above: an error body
+        # parses as JSON just fine, and without this the failure would surface far
+        # from its cause as a bare KeyError when the cache timestamp is read.
+        if "lastModified" not in json_content:
+            raise Exception(
+                "LoxAPP3.json is missing 'lastModified' (got keys: "
+                f"{sorted(json_content)[:10]}) - the Miniserver likely returned an "
+                "error body; check that the user has full access rights"
+            )
 
         # Save both files if persist is enabled
         if persist:
+            data_dir = get_config().paths.data_dir
             output_xml = os.path.join(
-                config.paths.data_dir,
+                data_dir,
                 f"{filename.replace('.zip', '').replace('.LoxCC', '')}.xml",
             )
-            output_json = os.path.join(config.paths.data_dir, "LoxAPP3.json")
+            output_json = os.path.join(data_dir, "LoxAPP3.json")
 
             async with aiofiles.open(output_xml, "w", encoding="utf-8") as f:
                 await f.write(config_content)
