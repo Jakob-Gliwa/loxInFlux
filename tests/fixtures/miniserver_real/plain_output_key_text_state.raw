@@ -1,0 +1,3 @@
+{"LL": { "control": "dev/sps/io/00000000-0000-0007-ffff000000000001/all", "value": "1925943440", "Code": "200",
+     "output": { "name": "Kühlen bei aktuellem Kühlbedarf", "icon": "00000000-0000-0000-0000000000000000", "color": 0, "value": "Default"}
+}}

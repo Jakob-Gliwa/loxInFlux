@@ -1,0 +1,320 @@
+RUN 0 before parsers
+number / round to 5: median_us=0.039 min_us=0.038 max_us=0.039 allocations=0 allocated_bytes=0
+grabber / 2 fields: median_us=0.364 min_us=0.358 max_us=0.368 allocations=6 allocated_bytes=1860
+grabber / 33 fields: median_us=6.382 min_us=6.336 max_us=6.424 allocations=45 allocated_bytes=8984
+XML bytes=2605334 websocket=7981 grabber=838
+XML / real export: median_us=14694.575 min_us=14471.275 max_us=15981.575 allocations=177750 allocated_bytes=21441264
+RUN 0 before pipeline
+f64 / all changes: 2000000 values in 0.093s; 21614767 values/s; 46.3 ns/value; 4637.7 MiB/s serialized
+round to 5 / all changes: 2000000 values in 0.201s; 9934285 values/s; 100.7 ns/value; 2130.6 MiB/s serialized
+f64 / unchanged suppression: 2000000 values in 0.020s; 100380190 values/s; 10.0 ns/value; 0.0 MiB/s serialized
+f64 / changes with dedup: 2000000 values in 0.091s; 21969059 values/s; 45.5 ns/value; 4713.8 MiB/s serialized
+round to 5 / changes with dedup: 2000000 values in 0.201s; 9943995 values/s; 100.6 ns/value; 2132.7 MiB/s serialized
+RUN 0 before hotpaths
+number dedup=false: median_us=0.042 min_us=0.042 max_us=0.046 allocations=0 allocated_bytes=0
+text plain dedup=false: median_us=0.090 min_us=0.083 max_us=0.095 allocations=1 allocated_bytes=20
+text unit dedup=false: median_us=0.252 min_us=0.247 max_us=0.275 allocations=1 allocated_bytes=14
+poll 2 fields dedup=false: median_us=0.461 min_us=0.458 max_us=0.463 allocations=6 allocated_bytes=1860
+number dedup=true: median_us=0.008 min_us=0.008 max_us=0.008 allocations=0 allocated_bytes=0
+text plain dedup=true: median_us=0.042 min_us=0.041 max_us=0.042 allocations=1 allocated_bytes=20
+text unit dedup=true: median_us=0.220 min_us=0.217 max_us=0.222 allocations=1 allocated_bytes=14
+poll 2 fields dedup=true: median_us=0.389 min_us=0.387 max_us=0.390 allocations=6 allocated_bytes=1860
+RUN 0 before mqtt
+MQTT 256: median_us=15.329 min_us=15.060 max_us=30.414 allocations=4 allocated_bytes=286
+MQTT 16384: median_us=38.130 min_us=37.688 max_us=38.950 allocations=4 allocated_bytes=286
+MQTT 262144: median_us=160.650 min_us=157.821 max_us=163.779 allocations=4 allocated_bytes=286
+RUN 0 before bridge
+bridge records=1 dedup=false: median_ns=20625.625 min_ns=18646.460 max_ns=23347.710
+bridge records=16 dedup=false: median_ns=1398.880 min_ns=1332.474 max_ns=1452.669
+bridge records=256 dedup=false: median_ns=259.058 min_ns=250.068 max_ns=262.419
+bridge records=1 dedup=true: median_ns=19965.830 min_ns=17828.750 max_ns=20070.415
+bridge records=16 dedup=true: median_ns=1429.466 min_ns=1386.758 max_ns=1768.789
+bridge records=256 dedup=true: median_ns=254.274 min_ns=247.367 max_ns=260.108
+RUN 0 after parsers
+number / round to 5: median_us=0.067 min_us=0.051 max_us=0.119 allocations=0 allocated_bytes=0
+grabber / 2 fields: median_us=0.382 min_us=0.352 max_us=0.471 allocations=4 allocated_bytes=1713
+grabber / 33 fields: median_us=6.279 min_us=6.245 max_us=6.430 allocations=43 allocated_bytes=8837
+XML bytes=2605334 websocket=7981 grabber=838
+XML / real export: median_us=14712.133 min_us=14669.533 max_us=14792.992 allocations=178238 allocated_bytes=20112880
+RUN 0 after pipeline
+f64 / all changes: 2000000 values in 0.097s; 20654862 values/s; 48.4 ns/value; 4431.8 MiB/s serialized
+round to 5 / all changes: 2000000 values in 0.197s; 10175474 values/s; 98.3 ns/value; 2182.4 MiB/s serialized
+f64 / unchanged suppression: 2000000 values in 0.018s; 110863461 values/s; 9.0 ns/value; 0.0 MiB/s serialized
+f64 / changes with dedup: 2000000 values in 0.096s; 20775120 values/s; 48.1 ns/value; 4457.6 MiB/s serialized
+round to 5 / changes with dedup: 2000000 values in 0.205s; 9754882 values/s; 102.5 ns/value; 2092.1 MiB/s serialized
+RUN 0 after hotpaths
+number dedup=false: median_us=0.061 min_us=0.056 max_us=0.073 allocations=0 allocated_bytes=0
+text plain dedup=false: median_us=0.117 min_us=0.104 max_us=0.130 allocations=1 allocated_bytes=20
+text unit dedup=false: median_us=0.290 min_us=0.254 max_us=0.342 allocations=1 allocated_bytes=14
+poll 2 fields dedup=false: median_us=0.356 min_us=0.354 max_us=0.372 allocations=4 allocated_bytes=1713
+number dedup=true: median_us=0.008 min_us=0.008 max_us=0.008 allocations=0 allocated_bytes=0
+text plain dedup=true: median_us=0.040 min_us=0.039 max_us=0.041 allocations=1 allocated_bytes=20
+text unit dedup=true: median_us=0.226 min_us=0.220 max_us=0.234 allocations=1 allocated_bytes=14
+poll 2 fields dedup=true: median_us=0.352 min_us=0.345 max_us=0.354 allocations=4 allocated_bytes=1713
+RUN 0 after mqtt
+MQTT 256: median_us=15.802 min_us=15.250 max_us=35.022 allocations=4 allocated_bytes=286
+MQTT 16384: median_us=36.821 min_us=36.351 max_us=37.458 allocations=4 allocated_bytes=286
+MQTT 262144: median_us=153.816 min_us=151.845 max_us=154.733 allocations=4 allocated_bytes=286
+RUN 0 after bridge
+bridge records=1 dedup=false: median_ns=18173.125 min_ns=17518.540 max_ns=38149.580
+bridge records=16 dedup=false: median_ns=1306.511 min_ns=1284.870 max_ns=1411.667
+bridge records=256 dedup=false: median_ns=245.431 min_ns=238.841 max_ns=247.381
+bridge records=1 dedup=true: median_ns=18928.750 min_ns=18825.830 max_ns=19062.500
+bridge records=16 dedup=true: median_ns=1382.800 min_ns=1363.945 max_ns=1392.109
+bridge records=256 dedup=true: median_ns=258.175 min_ns=249.328 max_ns=261.021
+RUN 1 after parsers
+number / round to 5: median_us=0.039 min_us=0.039 max_us=0.040 allocations=0 allocated_bytes=0
+grabber / 2 fields: median_us=0.335 min_us=0.329 max_us=0.338 allocations=4 allocated_bytes=1713
+grabber / 33 fields: median_us=6.325 min_us=6.276 max_us=6.371 allocations=43 allocated_bytes=8837
+XML bytes=2605334 websocket=7981 grabber=838
+XML / real export: median_us=14643.875 min_us=14576.792 max_us=14909.433 allocations=178238 allocated_bytes=20112880
+RUN 1 after pipeline
+f64 / all changes: 2000000 values in 0.084s; 23695290 values/s; 42.2 ns/value; 5084.1 MiB/s serialized
+round to 5 / all changes: 2000000 values in 0.196s; 10220494 values/s; 97.8 ns/value; 2192.0 MiB/s serialized
+f64 / unchanged suppression: 2000000 values in 0.019s; 108104211 values/s; 9.3 ns/value; 0.0 MiB/s serialized
+f64 / changes with dedup: 2000000 values in 0.091s; 22032872 values/s; 45.4 ns/value; 4727.4 MiB/s serialized
+round to 5 / changes with dedup: 2000000 values in 0.200s; 10023551 values/s; 99.8 ns/value; 2149.8 MiB/s serialized
+RUN 1 after hotpaths
+number dedup=false: median_us=0.030 min_us=0.030 max_us=0.031 allocations=0 allocated_bytes=0
+text plain dedup=false: median_us=0.069 min_us=0.068 max_us=0.072 allocations=1 allocated_bytes=20
+text unit dedup=false: median_us=0.244 min_us=0.243 max_us=0.245 allocations=1 allocated_bytes=14
+poll 2 fields dedup=false: median_us=0.354 min_us=0.349 max_us=0.356 allocations=4 allocated_bytes=1713
+number dedup=true: median_us=0.008 min_us=0.008 max_us=0.008 allocations=0 allocated_bytes=0
+text plain dedup=true: median_us=0.038 min_us=0.038 max_us=0.039 allocations=1 allocated_bytes=20
+text unit dedup=true: median_us=0.222 min_us=0.220 max_us=0.229 allocations=1 allocated_bytes=14
+poll 2 fields dedup=true: median_us=0.343 min_us=0.342 max_us=0.345 allocations=4 allocated_bytes=1713
+RUN 1 after mqtt
+MQTT 256: median_us=16.017 min_us=15.716 max_us=27.115 allocations=4 allocated_bytes=286
+MQTT 16384: median_us=37.055 min_us=36.134 max_us=37.618 allocations=4 allocated_bytes=286
+MQTT 262144: median_us=153.235 min_us=151.816 max_us=154.676 allocations=4 allocated_bytes=286
+RUN 1 after bridge
+bridge records=1 dedup=false: median_ns=19320.830 min_ns=18037.705 max_ns=19877.290
+bridge records=16 dedup=false: median_ns=1409.779 min_ns=1381.927 max_ns=1422.318
+bridge records=256 dedup=false: median_ns=251.473 min_ns=249.674 max_ns=256.032
+bridge records=1 dedup=true: median_ns=19111.455 min_ns=18588.335 max_ns=19681.250
+bridge records=16 dedup=true: median_ns=1397.240 min_ns=1381.654 max_ns=1432.031
+bridge records=256 dedup=true: median_ns=250.004 min_ns=248.732 max_ns=251.814
+RUN 1 before parsers
+number / round to 5: median_us=0.039 min_us=0.038 max_us=0.040 allocations=0 allocated_bytes=0
+grabber / 2 fields: median_us=0.381 min_us=0.354 max_us=0.383 allocations=6 allocated_bytes=1860
+grabber / 33 fields: median_us=6.364 min_us=6.333 max_us=6.392 allocations=45 allocated_bytes=8984
+XML bytes=2605334 websocket=7981 grabber=838
+XML / real export: median_us=14946.642 min_us=14860.250 max_us=15127.992 allocations=177750 allocated_bytes=21441264
+RUN 1 before pipeline
+f64 / all changes: 2000000 values in 0.090s; 22165444 values/s; 45.1 ns/value; 4755.9 MiB/s serialized
+round to 5 / all changes: 2000000 values in 0.202s; 9909411 values/s; 100.9 ns/value; 2125.3 MiB/s serialized
+f64 / unchanged suppression: 2000000 values in 0.020s; 101037320 values/s; 9.9 ns/value; 0.0 MiB/s serialized
+f64 / changes with dedup: 2000000 values in 0.090s; 22206770 values/s; 45.0 ns/value; 4764.8 MiB/s serialized
+round to 5 / changes with dedup: 2000000 values in 0.200s; 10015002 values/s; 99.9 ns/value; 2147.9 MiB/s serialized
+RUN 1 before hotpaths
+number dedup=false: median_us=0.034 min_us=0.034 max_us=0.035 allocations=0 allocated_bytes=0
+text plain dedup=false: median_us=0.076 min_us=0.074 max_us=0.077 allocations=1 allocated_bytes=20
+text unit dedup=false: median_us=0.247 min_us=0.246 max_us=0.252 allocations=1 allocated_bytes=14
+poll 2 fields dedup=false: median_us=0.455 min_us=0.453 max_us=0.473 allocations=6 allocated_bytes=1860
+number dedup=true: median_us=0.008 min_us=0.008 max_us=0.009 allocations=0 allocated_bytes=0
+text plain dedup=true: median_us=0.043 min_us=0.043 max_us=0.046 allocations=1 allocated_bytes=20
+text unit dedup=true: median_us=0.225 min_us=0.223 max_us=0.228 allocations=1 allocated_bytes=14
+poll 2 fields dedup=true: median_us=0.391 min_us=0.386 max_us=0.394 allocations=6 allocated_bytes=1860
+RUN 1 before mqtt
+MQTT 256: median_us=15.933 min_us=15.779 max_us=27.568 allocations=4 allocated_bytes=286
+MQTT 16384: median_us=37.596 min_us=37.121 max_us=38.092 allocations=4 allocated_bytes=286
+MQTT 262144: median_us=158.906 min_us=157.701 max_us=159.506 allocations=4 allocated_bytes=286
+RUN 1 before bridge
+bridge records=1 dedup=false: median_ns=19636.455 min_ns=17570.000 max_ns=19914.580
+bridge records=16 dedup=false: median_ns=1418.451 min_ns=1383.646 max_ns=1429.049
+bridge records=256 dedup=false: median_ns=251.269 min_ns=238.996 max_ns=262.943
+bridge records=1 dedup=true: median_ns=19675.210 min_ns=19483.335 max_ns=20183.335
+bridge records=16 dedup=true: median_ns=1426.185 min_ns=1402.721 max_ns=1445.846
+bridge records=256 dedup=true: median_ns=259.689 min_ns=244.234 max_ns=268.428
+RUN 2 before parsers
+number / round to 5: median_us=0.039 min_us=0.039 max_us=0.040 allocations=0 allocated_bytes=0
+grabber / 2 fields: median_us=0.373 min_us=0.369 max_us=0.387 allocations=6 allocated_bytes=1860
+grabber / 33 fields: median_us=6.325 min_us=6.299 max_us=6.486 allocations=45 allocated_bytes=8984
+XML bytes=2605334 websocket=7981 grabber=838
+XML / real export: median_us=14833.892 min_us=14761.850 max_us=14959.300 allocations=177750 allocated_bytes=21441264
+RUN 2 before pipeline
+f64 / all changes: 2000000 values in 0.093s; 21578484 values/s; 46.3 ns/value; 4630.0 MiB/s serialized
+round to 5 / all changes: 2000000 values in 0.202s; 9887513 values/s; 101.1 ns/value; 2120.6 MiB/s serialized
+f64 / unchanged suppression: 2000000 values in 0.020s; 100551566 values/s; 9.9 ns/value; 0.0 MiB/s serialized
+f64 / changes with dedup: 2000000 values in 0.090s; 22182438 values/s; 45.1 ns/value; 4759.5 MiB/s serialized
+round to 5 / changes with dedup: 2000000 values in 0.200s; 9975485 values/s; 100.2 ns/value; 2139.5 MiB/s serialized
+RUN 2 before hotpaths
+number dedup=false: median_us=0.034 min_us=0.033 max_us=0.034 allocations=0 allocated_bytes=0
+text plain dedup=false: median_us=0.073 min_us=0.071 max_us=0.076 allocations=1 allocated_bytes=20
+text unit dedup=false: median_us=0.247 min_us=0.246 max_us=0.248 allocations=1 allocated_bytes=14
+poll 2 fields dedup=false: median_us=0.451 min_us=0.449 max_us=0.452 allocations=6 allocated_bytes=1860
+number dedup=true: median_us=0.008 min_us=0.008 max_us=0.008 allocations=0 allocated_bytes=0
+text plain dedup=true: median_us=0.043 min_us=0.041 max_us=0.047 allocations=1 allocated_bytes=20
+text unit dedup=true: median_us=0.224 min_us=0.220 max_us=0.225 allocations=1 allocated_bytes=14
+poll 2 fields dedup=true: median_us=0.382 min_us=0.380 max_us=0.387 allocations=6 allocated_bytes=1860
+RUN 2 before mqtt
+MQTT 256: median_us=15.735 min_us=15.680 max_us=28.399 allocations=4 allocated_bytes=286
+MQTT 16384: median_us=37.210 min_us=36.932 max_us=37.425 allocations=4 allocated_bytes=286
+MQTT 262144: median_us=161.108 min_us=159.992 max_us=162.148 allocations=4 allocated_bytes=286
+RUN 2 before bridge
+bridge records=1 dedup=false: median_ns=18774.375 min_ns=17202.080 max_ns=19915.420
+bridge records=16 dedup=false: median_ns=1425.963 min_ns=1340.026 max_ns=1453.333
+bridge records=256 dedup=false: median_ns=255.665 min_ns=249.326 max_ns=259.586
+bridge records=1 dedup=true: median_ns=19497.705 min_ns=18919.375 max_ns=20331.875
+bridge records=16 dedup=true: median_ns=1421.250 min_ns=1350.703 max_ns=1496.237
+bridge records=256 dedup=true: median_ns=264.309 min_ns=251.739 max_ns=270.190
+RUN 2 after parsers
+number / round to 5: median_us=0.040 min_us=0.040 max_us=0.045 allocations=0 allocated_bytes=0
+grabber / 2 fields: median_us=0.338 min_us=0.336 max_us=0.357 allocations=4 allocated_bytes=1713
+grabber / 33 fields: median_us=6.270 min_us=6.238 max_us=6.420 allocations=43 allocated_bytes=8837
+XML bytes=2605334 websocket=7981 grabber=838
+XML / real export: median_us=14681.908 min_us=14565.750 max_us=14807.317 allocations=178238 allocated_bytes=20112880
+RUN 2 after pipeline
+f64 / all changes: 2000000 values in 0.085s; 23556086 values/s; 42.5 ns/value; 5054.3 MiB/s serialized
+round to 5 / all changes: 2000000 values in 0.195s; 10247002 values/s; 97.6 ns/value; 2197.7 MiB/s serialized
+f64 / unchanged suppression: 2000000 values in 0.018s; 111848478 values/s; 8.9 ns/value; 0.0 MiB/s serialized
+f64 / changes with dedup: 2000000 values in 0.089s; 22457285 values/s; 44.5 ns/value; 4818.5 MiB/s serialized
+round to 5 / changes with dedup: 2000000 values in 0.199s; 10031308 values/s; 99.7 ns/value; 2151.4 MiB/s serialized
+RUN 2 after hotpaths
+number dedup=false: median_us=0.028 min_us=0.028 max_us=0.029 allocations=0 allocated_bytes=0
+text plain dedup=false: median_us=0.071 min_us=0.068 max_us=0.073 allocations=1 allocated_bytes=20
+text unit dedup=false: median_us=0.246 min_us=0.244 max_us=0.254 allocations=1 allocated_bytes=14
+poll 2 fields dedup=false: median_us=0.358 min_us=0.353 max_us=0.360 allocations=4 allocated_bytes=1713
+number dedup=true: median_us=0.008 min_us=0.008 max_us=0.008 allocations=0 allocated_bytes=0
+text plain dedup=true: median_us=0.039 min_us=0.039 max_us=0.039 allocations=1 allocated_bytes=20
+text unit dedup=true: median_us=0.221 min_us=0.220 max_us=0.222 allocations=1 allocated_bytes=14
+poll 2 fields dedup=true: median_us=0.341 min_us=0.339 max_us=0.342 allocations=4 allocated_bytes=1713
+RUN 2 after mqtt
+MQTT 256: median_us=15.520 min_us=15.154 max_us=26.544 allocations=4 allocated_bytes=286
+MQTT 16384: median_us=36.439 min_us=35.813 max_us=37.087 allocations=4 allocated_bytes=286
+MQTT 262144: median_us=150.481 min_us=146.143 max_us=153.126 allocations=4 allocated_bytes=286
+RUN 2 after bridge
+bridge records=1 dedup=false: median_ns=19076.040 min_ns=17292.500 max_ns=19312.500
+bridge records=16 dedup=false: median_ns=1388.997 min_ns=1376.511 max_ns=1417.799
+bridge records=256 dedup=false: median_ns=242.770 min_ns=241.436 max_ns=244.330
+bridge records=1 dedup=true: median_ns=19266.250 min_ns=19002.290 max_ns=19534.375
+bridge records=16 dedup=true: median_ns=1391.771 min_ns=1380.273 max_ns=1416.875
+bridge records=256 dedup=true: median_ns=253.582 min_ns=244.994 max_ns=259.444
+RUN 3 after parsers
+number / round to 5: median_us=0.039 min_us=0.039 max_us=0.040 allocations=0 allocated_bytes=0
+grabber / 2 fields: median_us=0.337 min_us=0.332 max_us=0.343 allocations=4 allocated_bytes=1713
+grabber / 33 fields: median_us=6.279 min_us=6.244 max_us=6.495 allocations=43 allocated_bytes=8837
+XML bytes=2605334 websocket=7981 grabber=838
+XML / real export: median_us=14578.408 min_us=14563.083 max_us=14742.458 allocations=178238 allocated_bytes=20112880
+RUN 3 after pipeline
+f64 / all changes: 2000000 values in 0.085s; 23635680 values/s; 42.3 ns/value; 5071.4 MiB/s serialized
+round to 5 / all changes: 2000000 values in 0.195s; 10253179 values/s; 97.5 ns/value; 2199.0 MiB/s serialized
+f64 / unchanged suppression: 2000000 values in 0.019s; 107323486 values/s; 9.3 ns/value; 0.0 MiB/s serialized
+f64 / changes with dedup: 2000000 values in 0.091s; 21887595 values/s; 45.7 ns/value; 4696.3 MiB/s serialized
+round to 5 / changes with dedup: 2000000 values in 0.202s; 9897675 values/s; 101.0 ns/value; 2122.8 MiB/s serialized
+RUN 3 after hotpaths
+number dedup=false: median_us=0.028 min_us=0.028 max_us=0.029 allocations=0 allocated_bytes=0
+text plain dedup=false: median_us=0.067 min_us=0.066 max_us=0.071 allocations=1 allocated_bytes=20
+text unit dedup=false: median_us=0.245 min_us=0.244 max_us=0.251 allocations=1 allocated_bytes=14
+poll 2 fields dedup=false: median_us=0.350 min_us=0.348 max_us=0.360 allocations=4 allocated_bytes=1713
+number dedup=true: median_us=0.008 min_us=0.008 max_us=0.008 allocations=0 allocated_bytes=0
+text plain dedup=true: median_us=0.039 min_us=0.038 max_us=0.041 allocations=1 allocated_bytes=20
+text unit dedup=true: median_us=0.221 min_us=0.217 max_us=0.226 allocations=1 allocated_bytes=14
+poll 2 fields dedup=true: median_us=0.343 min_us=0.339 max_us=0.346 allocations=4 allocated_bytes=1713
+RUN 3 after mqtt
+MQTT 256: median_us=16.137 min_us=15.989 max_us=27.557 allocations=4 allocated_bytes=286
+MQTT 16384: median_us=37.457 min_us=36.591 max_us=37.890 allocations=4 allocated_bytes=286
+MQTT 262144: median_us=150.187 min_us=149.186 max_us=154.289 allocations=4 allocated_bytes=286
+RUN 3 after bridge
+bridge records=1 dedup=false: median_ns=19249.165 min_ns=17022.085 max_ns=20386.460
+bridge records=16 dedup=false: median_ns=1421.146 min_ns=1415.247 max_ns=1478.255
+bridge records=256 dedup=false: median_ns=254.055 min_ns=249.179 max_ns=257.334
+bridge records=1 dedup=true: median_ns=19960.210 min_ns=18344.375 max_ns=20694.375
+bridge records=16 dedup=true: median_ns=1410.456 min_ns=1388.346 max_ns=1420.130
+bridge records=256 dedup=true: median_ns=258.960 min_ns=250.373 max_ns=264.729
+RUN 3 before parsers
+number / round to 5: median_us=0.042 min_us=0.039 max_us=0.042 allocations=0 allocated_bytes=0
+grabber / 2 fields: median_us=0.368 min_us=0.365 max_us=0.370 allocations=6 allocated_bytes=1860
+grabber / 33 fields: median_us=6.351 min_us=6.304 max_us=6.400 allocations=45 allocated_bytes=8984
+XML bytes=2605334 websocket=7981 grabber=838
+XML / real export: median_us=14857.533 min_us=14697.858 max_us=15534.367 allocations=177750 allocated_bytes=21441264
+RUN 3 before pipeline
+f64 / all changes: 2000000 values in 0.091s; 22043901 values/s; 45.4 ns/value; 4729.8 MiB/s serialized
+round to 5 / all changes: 2000000 values in 0.200s; 9990239 values/s; 100.1 ns/value; 2142.6 MiB/s serialized
+f64 / unchanged suppression: 2000000 values in 0.020s; 98086494 values/s; 10.2 ns/value; 0.0 MiB/s serialized
+f64 / changes with dedup: 2000000 values in 0.091s; 22027281 values/s; 45.4 ns/value; 4726.2 MiB/s serialized
+round to 5 / changes with dedup: 2000000 values in 0.200s; 9976997 values/s; 100.2 ns/value; 2139.8 MiB/s serialized
+RUN 3 before hotpaths
+number dedup=false: median_us=0.033 min_us=0.033 max_us=0.034 allocations=0 allocated_bytes=0
+text plain dedup=false: median_us=0.071 min_us=0.070 max_us=0.075 allocations=1 allocated_bytes=20
+text unit dedup=false: median_us=0.249 min_us=0.246 max_us=0.250 allocations=1 allocated_bytes=14
+poll 2 fields dedup=false: median_us=0.449 min_us=0.443 max_us=0.454 allocations=6 allocated_bytes=1860
+number dedup=true: median_us=0.008 min_us=0.008 max_us=0.008 allocations=0 allocated_bytes=0
+text plain dedup=true: median_us=0.042 min_us=0.041 max_us=0.043 allocations=1 allocated_bytes=20
+text unit dedup=true: median_us=0.220 min_us=0.219 max_us=0.221 allocations=1 allocated_bytes=14
+poll 2 fields dedup=true: median_us=0.382 min_us=0.381 max_us=0.384 allocations=6 allocated_bytes=1860
+RUN 3 before mqtt
+MQTT 256: median_us=15.799 min_us=15.332 max_us=27.422 allocations=4 allocated_bytes=286
+MQTT 16384: median_us=37.026 min_us=29.640 max_us=38.153 allocations=4 allocated_bytes=286
+MQTT 262144: median_us=160.185 min_us=158.565 max_us=161.490 allocations=4 allocated_bytes=286
+RUN 3 before bridge
+bridge records=1 dedup=false: median_ns=20253.750 min_ns=18598.750 max_ns=20515.625
+bridge records=16 dedup=false: median_ns=1426.940 min_ns=1398.008 max_ns=1489.766
+bridge records=256 dedup=false: median_ns=265.621 min_ns=262.585 max_ns=271.894
+bridge records=1 dedup=true: median_ns=19363.750 min_ns=17350.420 max_ns=20111.455
+bridge records=16 dedup=true: median_ns=1422.253 min_ns=1412.253 max_ns=1449.544
+bridge records=256 dedup=true: median_ns=259.295 min_ns=240.881 max_ns=266.236
+RUN 4 before parsers
+number / round to 5: median_us=0.039 min_us=0.039 max_us=0.040 allocations=0 allocated_bytes=0
+grabber / 2 fields: median_us=0.369 min_us=0.352 max_us=0.371 allocations=6 allocated_bytes=1860
+grabber / 33 fields: median_us=6.338 min_us=6.319 max_us=6.376 allocations=45 allocated_bytes=8984
+XML bytes=2605334 websocket=7981 grabber=838
+XML / real export: median_us=14729.458 min_us=14686.033 max_us=14969.767 allocations=177750 allocated_bytes=21441264
+RUN 4 before pipeline
+f64 / all changes: 2000000 values in 0.093s; 21508508 values/s; 46.5 ns/value; 4614.9 MiB/s serialized
+round to 5 / all changes: 2000000 values in 0.202s; 9900459 values/s; 101.0 ns/value; 2123.4 MiB/s serialized
+f64 / unchanged suppression: 2000000 values in 0.020s; 102393887 values/s; 9.8 ns/value; 0.0 MiB/s serialized
+f64 / changes with dedup: 2000000 values in 0.092s; 21685741 values/s; 46.1 ns/value; 4653.0 MiB/s serialized
+round to 5 / changes with dedup: 2000000 values in 0.202s; 9902596 values/s; 101.0 ns/value; 2123.8 MiB/s serialized
+RUN 4 before hotpaths
+number dedup=false: median_us=0.033 min_us=0.033 max_us=0.033 allocations=0 allocated_bytes=0
+text plain dedup=false: median_us=0.072 min_us=0.070 max_us=0.082 allocations=1 allocated_bytes=20
+text unit dedup=false: median_us=0.251 min_us=0.247 max_us=0.257 allocations=1 allocated_bytes=14
+poll 2 fields dedup=false: median_us=0.447 min_us=0.445 max_us=0.451 allocations=6 allocated_bytes=1860
+number dedup=true: median_us=0.008 min_us=0.008 max_us=0.009 allocations=0 allocated_bytes=0
+text plain dedup=true: median_us=0.042 min_us=0.041 max_us=0.043 allocations=1 allocated_bytes=20
+text unit dedup=true: median_us=0.224 min_us=0.220 max_us=0.226 allocations=1 allocated_bytes=14
+poll 2 fields dedup=true: median_us=0.389 min_us=0.383 max_us=0.399 allocations=6 allocated_bytes=1860
+RUN 4 before mqtt
+MQTT 256: median_us=15.734 min_us=14.119 max_us=24.702 allocations=4 allocated_bytes=286
+MQTT 16384: median_us=36.957 min_us=36.082 max_us=38.333 allocations=4 allocated_bytes=286
+MQTT 262144: median_us=160.015 min_us=149.995 max_us=163.451 allocations=4 allocated_bytes=286
+RUN 4 before bridge
+bridge records=1 dedup=false: median_ns=19470.420 min_ns=17000.415 max_ns=19939.790
+bridge records=16 dedup=false: median_ns=1388.568 min_ns=1365.156 max_ns=1412.864
+bridge records=256 dedup=false: median_ns=256.583 min_ns=248.276 max_ns=257.996
+bridge records=1 dedup=true: median_ns=19684.585 min_ns=19304.795 max_ns=19810.000
+bridge records=16 dedup=true: median_ns=1414.714 min_ns=1385.261 max_ns=1437.838
+bridge records=256 dedup=true: median_ns=254.210 min_ns=243.582 max_ns=256.140
+RUN 4 after parsers
+number / round to 5: median_us=0.039 min_us=0.039 max_us=0.039 allocations=0 allocated_bytes=0
+grabber / 2 fields: median_us=0.332 min_us=0.329 max_us=0.342 allocations=4 allocated_bytes=1713
+grabber / 33 fields: median_us=6.313 min_us=6.265 max_us=6.383 allocations=43 allocated_bytes=8837
+XML bytes=2605334 websocket=7981 grabber=838
+XML / real export: median_us=14738.442 min_us=14657.883 max_us=14813.658 allocations=178238 allocated_bytes=20112880
+RUN 4 after pipeline
+f64 / all changes: 2000000 values in 0.084s; 23803408 values/s; 42.0 ns/value; 5107.3 MiB/s serialized
+round to 5 / all changes: 2000000 values in 0.196s; 10203047 values/s; 98.0 ns/value; 2188.3 MiB/s serialized
+f64 / unchanged suppression: 2000000 values in 0.019s; 107928224 values/s; 9.3 ns/value; 0.0 MiB/s serialized
+f64 / changes with dedup: 2000000 values in 0.090s; 22204479 values/s; 45.0 ns/value; 4764.3 MiB/s serialized
+round to 5 / changes with dedup: 2000000 values in 0.201s; 9951718 values/s; 100.5 ns/value; 2134.4 MiB/s serialized
+RUN 4 after hotpaths
+number dedup=false: median_us=0.028 min_us=0.028 max_us=0.029 allocations=0 allocated_bytes=0
+text plain dedup=false: median_us=0.072 min_us=0.070 max_us=0.074 allocations=1 allocated_bytes=20
+text unit dedup=false: median_us=0.248 min_us=0.248 max_us=0.249 allocations=1 allocated_bytes=14
+poll 2 fields dedup=false: median_us=0.353 min_us=0.352 max_us=0.354 allocations=4 allocated_bytes=1713
+number dedup=true: median_us=0.008 min_us=0.008 max_us=0.008 allocations=0 allocated_bytes=0
+text plain dedup=true: median_us=0.039 min_us=0.039 max_us=0.039 allocations=1 allocated_bytes=20
+text unit dedup=true: median_us=0.223 min_us=0.220 max_us=0.224 allocations=1 allocated_bytes=14
+poll 2 fields dedup=true: median_us=0.339 min_us=0.338 max_us=0.342 allocations=4 allocated_bytes=1713
+RUN 4 after mqtt
+MQTT 256: median_us=15.829 min_us=14.780 max_us=29.582 allocations=4 allocated_bytes=286
+MQTT 16384: median_us=36.530 min_us=36.145 max_us=36.861 allocations=4 allocated_bytes=286
+MQTT 262144: median_us=151.347 min_us=149.988 max_us=153.337 allocations=4 allocated_bytes=286
+RUN 4 after bridge
+bridge records=1 dedup=false: median_ns=19182.085 min_ns=17658.335 max_ns=19897.915
+bridge records=16 dedup=false: median_ns=1419.167 min_ns=1392.083 max_ns=1455.378
+bridge records=256 dedup=false: median_ns=248.509 min_ns=235.503 max_ns=252.983
+bridge records=1 dedup=true: median_ns=19797.500 min_ns=19064.580 max_ns=20062.500
+bridge records=16 dedup=true: median_ns=1416.562 min_ns=1405.065 max_ns=1428.555
+bridge records=256 dedup=true: median_ns=250.709 min_ns=247.936 max_ns=257.146

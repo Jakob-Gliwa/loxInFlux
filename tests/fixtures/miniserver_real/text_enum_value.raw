@@ -1,0 +1,3 @@
+{"LL": { "control": "dev/sps/io/00000000-0000-000b-ffff000000000001/all", "value": "1923482544", "Code": "200",
+     "output": { "name": "Bestimmung Heiz-Kühlmodus", "icon": "00000000-0000-0000-0000000000000000", "color": 7405453, "value": "Nur heizen"}
+}}

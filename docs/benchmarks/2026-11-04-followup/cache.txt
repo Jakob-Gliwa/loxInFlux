@@ -1,0 +1,12 @@
+RUN 0
+cache buffer=0: median_us=39519.275 min_us=26970.721 max_us=66152.746 allocations=16 allocated_bytes=8388480
+cache buffer=65536: median_us=32964.267 min_us=25941.504 max_us=55698.062 allocations=1 allocated_bytes=65536
+cache buffer=262144: median_us=28743.650 min_us=26021.304 max_us=52952.904 allocations=1 allocated_bytes=262144
+RUN 1
+cache buffer=0: median_us=29819.075 min_us=28711.725 max_us=71364.529 allocations=16 allocated_bytes=8388480
+cache buffer=65536: median_us=31671.071 min_us=30411.375 max_us=51082.608 allocations=1 allocated_bytes=65536
+cache buffer=262144: median_us=32990.383 min_us=31251.100 max_us=81826.496 allocations=1 allocated_bytes=262144
+RUN 2
+cache buffer=0: median_us=39639.738 min_us=33184.363 max_us=61234.171 allocations=16 allocated_bytes=8388480
+cache buffer=65536: median_us=35013.729 min_us=32428.463 max_us=57628.392 allocations=1 allocated_bytes=65536
+cache buffer=262144: median_us=34422.350 min_us=32128.654 max_us=60855.329 allocations=1 allocated_bytes=262144

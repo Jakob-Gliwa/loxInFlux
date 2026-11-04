@@ -1,0 +1,452 @@
+[
+  {
+    "measurement": "Room",
+    "tags": {
+      "room": "kitchen",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "Room,room=kitchen,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "Room",
+    "tags": {
+      "room": "first",
+      "z": "kitchen"
+    },
+    "field": "AQ\tvalue",
+    "line": "Room,room=first,z=kitchen AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "Room",
+    "tags": {
+      "room": "A\tB",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "Room,room=A\\tB,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "Room",
+    "tags": {
+      "room": "first",
+      "z": "A\tB"
+    },
+    "field": "AQ\tvalue",
+    "line": "Room,room=first,z=A\\tB AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "Room",
+    "tags": {
+      "room": "path\\",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "Room,room=path\\ ,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "Room",
+    "tags": {
+      "room": "first",
+      "z": "path\\"
+    },
+    "field": "AQ\tvalue",
+    "line": "Room,room=first,z=path\\  AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "Room",
+    "tags": {
+      "room": "two\\\\",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "Room,room=two\\\\ ,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "Room",
+    "tags": {
+      "room": "first",
+      "z": "two\\\\"
+    },
+    "field": "AQ\tvalue",
+    "line": "Room,room=first,z=two\\\\  AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "Room",
+    "tags": {
+      "room": "A, B=C",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "Room,room=A\\,\\ B\\=C,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "Room",
+    "tags": {
+      "room": "first",
+      "z": "A, B=C"
+    },
+    "field": "AQ\tvalue",
+    "line": "Room,room=first,z=A\\,\\ B\\=C AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "Room\tA",
+    "tags": {
+      "room": "kitchen",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "Room\\tA,room=kitchen,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "Room\tA",
+    "tags": {
+      "room": "first",
+      "z": "kitchen"
+    },
+    "field": "AQ\tvalue",
+    "line": "Room\\tA,room=first,z=kitchen AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "Room\tA",
+    "tags": {
+      "room": "A\tB",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "Room\\tA,room=A\\tB,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "Room\tA",
+    "tags": {
+      "room": "first",
+      "z": "A\tB"
+    },
+    "field": "AQ\tvalue",
+    "line": "Room\\tA,room=first,z=A\\tB AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "Room\tA",
+    "tags": {
+      "room": "path\\",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "Room\\tA,room=path\\ ,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "Room\tA",
+    "tags": {
+      "room": "first",
+      "z": "path\\"
+    },
+    "field": "AQ\tvalue",
+    "line": "Room\\tA,room=first,z=path\\  AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "Room\tA",
+    "tags": {
+      "room": "two\\\\",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "Room\\tA,room=two\\\\ ,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "Room\tA",
+    "tags": {
+      "room": "first",
+      "z": "two\\\\"
+    },
+    "field": "AQ\tvalue",
+    "line": "Room\\tA,room=first,z=two\\\\  AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "Room\tA",
+    "tags": {
+      "room": "A, B=C",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "Room\\tA,room=A\\,\\ B\\=C,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "Room\tA",
+    "tags": {
+      "room": "first",
+      "z": "A, B=C"
+    },
+    "field": "AQ\tvalue",
+    "line": "Room\\tA,room=first,z=A\\,\\ B\\=C AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "A B,C",
+    "tags": {
+      "room": "kitchen",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "A\\ B\\,C,room=kitchen,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "A B,C",
+    "tags": {
+      "room": "first",
+      "z": "kitchen"
+    },
+    "field": "AQ\tvalue",
+    "line": "A\\ B\\,C,room=first,z=kitchen AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "A B,C",
+    "tags": {
+      "room": "A\tB",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "A\\ B\\,C,room=A\\tB,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "A B,C",
+    "tags": {
+      "room": "first",
+      "z": "A\tB"
+    },
+    "field": "AQ\tvalue",
+    "line": "A\\ B\\,C,room=first,z=A\\tB AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "A B,C",
+    "tags": {
+      "room": "path\\",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "A\\ B\\,C,room=path\\ ,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "A B,C",
+    "tags": {
+      "room": "first",
+      "z": "path\\"
+    },
+    "field": "AQ\tvalue",
+    "line": "A\\ B\\,C,room=first,z=path\\  AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "A B,C",
+    "tags": {
+      "room": "two\\\\",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "A\\ B\\,C,room=two\\\\ ,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "A B,C",
+    "tags": {
+      "room": "first",
+      "z": "two\\\\"
+    },
+    "field": "AQ\tvalue",
+    "line": "A\\ B\\,C,room=first,z=two\\\\  AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "A B,C",
+    "tags": {
+      "room": "A, B=C",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "A\\ B\\,C,room=A\\,\\ B\\=C,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "A B,C",
+    "tags": {
+      "room": "first",
+      "z": "A, B=C"
+    },
+    "field": "AQ\tvalue",
+    "line": "A\\ B\\,C,room=first,z=A\\,\\ B\\=C AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "A\\B",
+    "tags": {
+      "room": "kitchen",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "A\\B,room=kitchen,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "A\\B",
+    "tags": {
+      "room": "first",
+      "z": "kitchen"
+    },
+    "field": "AQ\tvalue",
+    "line": "A\\B,room=first,z=kitchen AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "A\\B",
+    "tags": {
+      "room": "A\tB",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "A\\B,room=A\\tB,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "A\\B",
+    "tags": {
+      "room": "first",
+      "z": "A\tB"
+    },
+    "field": "AQ\tvalue",
+    "line": "A\\B,room=first,z=A\\tB AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "A\\B",
+    "tags": {
+      "room": "path\\",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "A\\B,room=path\\ ,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "A\\B",
+    "tags": {
+      "room": "first",
+      "z": "path\\"
+    },
+    "field": "AQ\tvalue",
+    "line": "A\\B,room=first,z=path\\  AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "A\\B",
+    "tags": {
+      "room": "two\\\\",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "A\\B,room=two\\\\ ,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "A\\B",
+    "tags": {
+      "room": "first",
+      "z": "two\\\\"
+    },
+    "field": "AQ\tvalue",
+    "line": "A\\B,room=first,z=two\\\\  AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "A\\B",
+    "tags": {
+      "room": "A, B=C",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "A\\B,room=A\\,\\ B\\=C,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "A\\B",
+    "tags": {
+      "room": "first",
+      "z": "A, B=C"
+    },
+    "field": "AQ\tvalue",
+    "line": "A\\B,room=first,z=A\\,\\ B\\=C AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "温度",
+    "tags": {
+      "room": "kitchen",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "温度,room=kitchen,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "温度",
+    "tags": {
+      "room": "first",
+      "z": "kitchen"
+    },
+    "field": "AQ\tvalue",
+    "line": "温度,room=first,z=kitchen AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "温度",
+    "tags": {
+      "room": "A\tB",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "温度,room=A\\tB,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "温度",
+    "tags": {
+      "room": "first",
+      "z": "A\tB"
+    },
+    "field": "AQ\tvalue",
+    "line": "温度,room=first,z=A\\tB AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "温度",
+    "tags": {
+      "room": "path\\",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "温度,room=path\\ ,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "温度",
+    "tags": {
+      "room": "first",
+      "z": "path\\"
+    },
+    "field": "AQ\tvalue",
+    "line": "温度,room=first,z=path\\  AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "温度",
+    "tags": {
+      "room": "two\\\\",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "温度,room=two\\\\ ,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "温度",
+    "tags": {
+      "room": "first",
+      "z": "two\\\\"
+    },
+    "field": "AQ\tvalue",
+    "line": "温度,room=first,z=two\\\\  AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "温度",
+    "tags": {
+      "room": "A, B=C",
+      "z": "last"
+    },
+    "field": "AQ\tvalue",
+    "line": "温度,room=A\\,\\ B\\=C,z=last AQ\\tvalue=1.25 42\n"
+  },
+  {
+    "measurement": "温度",
+    "tags": {
+      "room": "first",
+      "z": "A, B=C"
+    },
+    "field": "AQ\tvalue",
+    "line": "温度,room=first,z=A\\,\\ B\\=C AQ\\tvalue=1.25 42\n"
+  }
+]

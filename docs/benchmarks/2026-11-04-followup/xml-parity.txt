@@ -1,0 +1,15 @@
+sps_0252_20260104121455.xml
+XML bytes: 2605334; routes: 7981; grabber: 838; parse: 28.579375ms
+Legacy parse: 0.378s; websocket routes: 7981; grabber: 838
+websocket: missing=0, extra=0, different=0
+grabber: missing=0, extra=0, different=0
+sps_0252_20250708221536.xml
+XML bytes: 2585086; routes: 7934; grabber: 834; parse: 16.775625ms
+Legacy parse: 0.203s; websocket routes: 7934; grabber: 834
+websocket: missing=0, extra=0, different=0
+grabber: missing=0, extra=0, different=0
+sps_0250_20250119183821.xml
+XML bytes: 2524186; routes: 7872; grabber: 832; parse: 18.206459ms
+Legacy parse: 0.208s; websocket routes: 7872; grabber: 832
+websocket: missing=0, extra=0, different=0
+grabber: missing=0, extra=0, different=0

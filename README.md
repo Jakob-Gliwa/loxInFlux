@@ -1,296 +1,228 @@
-# LoxInFlux
+# loxToTelegraf
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-![Docker Pulls](https://img.shields.io/docker/pulls/acidcliff/loxinflux)
-![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/jakob-gliwa/loxInFlux/ci.yml)
-[![Static Badge](https://img.shields.io/badge/get_it-on_Docker_Hub-blue)](https://hub.docker.com/r/acidcliff/loxinflux)
+Rust rewrite of [loxInFlux](https://github.com/Jakob-Gliwa/loxInFlux), using
+[loxwebsocket](https://github.com/Jakob-Gliwa/loxwebsocketclient-rs) pinned to
+release **0.3.2** (Rust 1.99+). Collects visualized states and polls
+non-visualized controls, then forwards Influx line protocol to Telegraf through
+UDP, TCP, MQTT 3.1.1/QoS 0, or execd/stdout. No Python runtime.
 
+## Start
 
-> ⚠️ This project is in no way affiliated with Loxone, software, company or its developers.
+The [relay history audit](docs/relay-audit.md) records the XML/JSON optimizations,
+regression fixes and decisions carried over from loxMqttRelay's Rust branches.
+The [final cross-repository comparison](docs/final-audit.md) adds a detailed
+contract matrix, further lifecycle/parser regressions and remaining client API
+limitations.
 
-LoxInFlux is a Python application that collects metrics from your Loxone Miniserver and forwards them to Telegraf, enabling you to store and visualize your smart home data in time-series databases like InfluxDB.
-
-Whilst it is called LoxInFlux it is mainly a (one way) bridge between Loxone Miniserver and Telegraf, so in theory it is possible to not just output to Influx but to all outputs that are supported by Telegraf.
-
-LoxInFlux is heavily inspired by the fabulous Loxberry Plugin "Stats4Lox (NG)", which many have used for years, but follows a more oppinionated approach:
-- LoxInFlux hooks into the Websocket of the Miniserver, which propagates all updates of controls, that are a) set to visible and b) have a category or c) are linked to an control that meet a) & b). All of these are forwarded to Telegraf
-- For all other controls a grabber is used which actively requests information (via Websocket) in an defined interval
-- There is no GUI, no selection of individual data fields, no collection of individual mqtt topics, ... . It's mostly all-or-nothing. While LoxInFlux has some basic filtering / blacklisting functionality (see below), the main idea is to leverage the capabilities of Telegraf to do this kind of stuff with its much more capable processors / aggregators (see examples below)
-
-```mermaid
-graph LR
-    A[Loxone Miniserver] -->|WebSocket events & active polling| B[LoxInFlux]
-    B -->|UDP/TCP/MQTT| C[Telegraf]
-    C -->|Write| D[InfluxDB]
-    D -->|Query| E[Grafana/Visualization]
+```sh
+cp config/default_config.toml config/config.toml
+# Edit Miniserver and Telegraf credentials/addresses.
+cargo build --release --locked
+target/release/loxtotelegraf --config-dir config --check-config
+target/release/loxtotelegraf --config-dir config --data-dir data
 ```
 
-> ⚠️ InfluxDB also allows writing to STDOUT in accordance with Telegrafs EXECD-Plugin specification - so it should be able to run as EXECD daemon - but it is not yet tested
+An existing loxInFlux `config.toml` can be used directly. All existing tables and
+documented keys are supported, as are `--config-dir`, `--data-dir`, `--log-level`
+and the Docker environment variables `CONFIG_DIR`, `DATA_DIR`, `LOG_LEVEL`.
+Legacy entries that Python ignored at the top level, directly under `[telegraf]`
+or directly under `[filters]` now produce a deprecation warning and are ignored.
+This includes `telegraf.round_floats` and `telegraf.round_decimals`; they do not
+activate rounding. Remove these entries: accepting them will no longer be supported
+in a future version. Effective rounding settings remain `general.round_floats`
+and `general.rounding_precision`. Invalid supported settings still fail validation.
 
-## Quick Start
+CLI arguments override environment variables; the data directory then overrides
+`[paths].data_dir`. `--config-file` also accepts an explicit file. Logs go to stderr.
 
-```bash
-# 1. Get the configuration template (config/default_config.toml)
-mkdir -p config
-curl -o config/config.toml https://raw.githubusercontent.com/JakobGliwa/loxinflux/main/config/default_config.toml
-
-# 2. Edit config/config.toml with your settings
-# If run locally, the application excepts the config folder to be in the same directory as the src folder. Under docker it is expected to be the folder mapped to /app/config
-
-# 3. Run with Docker
-docker run -d \
-  --name loxinflux \
-  -e TZ="<your timezone>" \
-  -v $(pwd)/config:/app/config \
-  -v $(pwd)/data:/app/data \
-  --restart unless-stopped \
-  acidcliff/loxinflux:latest
+```sh
+docker compose build
+docker compose up -d
 ```
 
-## Features
+The existing `/app/config` and `/app/data` mounts remain usable. The Docker image
+also provides `loxInFlux` as a binary alias. Configuration HTTP endpoints require
+a Miniserver user with full access, as in loxInFlux 0.3.0. Port 443 selects HTTPS;
+other ports select HTTP. `miniserver.tls_verify = false` preserves the existing
+self-signed certificate behavior; set it to true for normal certificate validation.
 
-- Collects metrics from Loxone Miniserver via WebSocket or periodic polling
-- Forwards data to Telegraf via various protocols (UDP, TCP, MQTT, or stdout)
-- Configurable filtering of control types and UUIDs
-- Docker support for easy deployment
-- Automatic reconnection handling
-- Configurable data rounding for float values to help Telegraf filters
+## Precision and compatibility
 
-## Data Format
+Numbers stay `f64` through parsing, normalization and serialization, including
+whole numbers. `21.2` never becomes `21`, and `42` is written as `42.0`, never `42i`.
+Without rounding, the shortest decimal representation round-trips to the same
+binary float. Existing `round_floats` settings still apply; the new template turns
+rounding off to preserve the received precision.
 
-LoxInFlux collects metrics from your Loxone Miniserver and forwards them to Telegraf in InfluxDB Line Protocol format:
+The XML control title remains the measurement name. Existing tags are preserved:
+`name`, `description`, `uuid`, `subuuid`, `statstype`, `analog`, `type`, `unit`,
+`category`, `room`, `visu`, `source`, `application=loxInFlux`. Numeric fields remain
+`Default`, `AQ`, `Q`, or the output/state name. Empty tags are omitted as before.
 
-```
-loxone,uuid=12345678-1234-1234-1234123456789012,type=TEMPERATURE,name=TemperatureKitchen,... value=21.5
-loxone,uuid=87654321-4321-4321-4321210987654321,type=HUMIDITY,name=HumiditySensorKitchen,... value=45.2
-```
+Intentional corrections:
 
-Each metric includes:
-- Measurement name: Always "loxone"
-- Tags:
-  - uuid: Unique identifier of the control as per Loxone Configuration / JSON-Definition
-  - subuuid: Unique identifier of individual fields of a control as per Loxone Config
-  - type: Control type (e.g., TEMPERATURE, HUMIDITY)
-  - name: Control name from Loxone Config
-  - statstype: Type of stats item
-  - unit: Unit (if set in the configuration)
-  - category: Category set in Loxone Config
-  - room: Room the control is set to
-  - source: Will either be websocket or grabber 
-  - visu: Wether the control is set to visible in the Loxone Config
-  - application: Set always to loxInFlux
-- Field: value (the actual measurement)
+- Numeric strings and number/unit strings become floats on both paths. Dates,
+  times, comma decimals and sentences beginning with a number remain text.
+- Empty values, `<v.…>` placeholders, unsupported structured values and nonfinite
+  numbers are discarded and counted.
+- Genuine strings use a separate field, e.g. `__text__Default` or `__text__TQ`.
+  This prevents collisions when different controls with the same measurement
+  title produce different value types. Numeric names starting with `__text__` or
+  `__number__` are escaped into the reserved `__number__` namespace.
+- WebSocket filters also apply to dynamically discovered state updates. The
+  old fallback could bypass them. Parent filters also apply to their children.
+- WebSocket text states (type 3) are handled as well as numeric states (type 2).
+- Every point has a receive timestamp in nanoseconds, including grabber points
+  without additional outputs. Multi-output grabber responses share a timestamp.
 
-> ⚠️ InfluxDB tags generated by LoxInFlux are inspired by the way Stats4Lox handled it, but I can not guarantee that all value formats will be the same. If you plan on continuing your Stats4Lox history, consider leveraging the capabilities of Telegraf to remap data where necessary.
+The corresponding switches in `[processing]` can preserve legacy text/empty
+field behavior when needed. The numeric truncation bug is deliberately never
+reintroduced. `VirtualTextIn` is never polled: its `all` command would write text.
+Daytimer/weather tables were not exported by loxInFlux and are not mapped here.
 
-## Installation
+In the old project's PR #5, unit extraction was deliberately left to Telegraf.
+If your existing Telegraf processors already own this step, use
+`processing.parse_numeric_units = false`. To preserve raw string field names,
+empty strings and placeholders as well, see the explicit compatibility settings
+in [the history audit](docs/history-audit.md#processing-policy-from-pr-5).
 
-### Using Docker (Recommended)
+With `protocol = "execd"`, metrics go to stdout and logs go to stderr with
+Telegraf's `E!`/`W!`/`I!`/`D!`/`T!` severity prefixes.
 
-The Docker image is available on Docker Hub:
-```bash
-docker pull acidcliff/loxinflux:latest
-```
+**Existing InfluxDB field types do not change when the application is fixed.**
+Use a fresh bucket for the first precision-correct run, or plan a separate
+history/schema migration. Writing a float into an old integer/string field can
+still be rejected. No historical data is rewritten by this application.
 
-For installation:
-1. Create a configuration directory and copy the default configuration:
-```bash
-mkdir -p config data
-curl -o config/config.toml https://raw.githubusercontent.com/JakobGliwa/loxinflux/main/config/default_config.toml
-```
+## Change-only writes and heartbeat
 
-2. Edit the configuration file (see Configuration section below)
-
-3. Run the Docker container:
-```bash
-docker run -d \
-  --name loxinflux \
-  -v $(pwd)/config:/app/config \
-  -v $(pwd)/data:/app/data \
-  --restart unless-stopped \
-  acidcliff/loxinflux:latest
-```
-
-Note: Port mappings (-p flags) are only needed if you're using TCP/UDP protocols and Telegraf is running on a different host.
-
-### Using uv (Alternative)
-
-Project is built with uv, so you can install it with uv.
-As one core component of LoxInFlux is written in C(ython), you need to make sure to have a C compiler installed (e.g. gcc).
-
-Requirements:
-- Python 3.14 or higher
-
-To build clone the repo and run in the root folder:
-```bash
-uv venv .venv
-source .venv/bin/activate
-uv pip install .
-cd src/loxwebsocket/cython_modules
-python setup.py build_ext --inplace
-uv run loxInFlux
-```
-
-loxInFlux accepts the same arguments as the docker container:
-- --config-dir: Path to the configuration directory
-- --data-dir: Path to the data directory
-- --log-level: Logging verbosity (default: INFO)
-
-## Configuration
-
-### Telegraf Setup
-
-1. Install Telegraf following the [official guide](https://docs.influxdata.com/telegraf/latest/installation/) (preferably via docker)
-
-2. Add the appropriate input plugin to your Telegraf configuration:
-
-For UDP (default):
-```toml
-[[inputs.socket_listener]]
-  service_address = "udp://:<port-you-set-in-loxinflux-config>"
-  data_format = "influx"
-```
-
-For TCP:
-```toml
-[[inputs.socket_listener]]
-  service_address = "tcp://:<port-you-set-in-loxinflux-config>"
-  data_format = "influx"
-```
-
-For MQTT:
-```toml
-[[inputs.mqtt_consumer]]
-  servers = ["tcp://<host>:<port-you-set-in-loxinflux-config>"]
-  topics = ["<topic-you-set-in-loxinflux-config>"]
-  data_format = "influx"
-  username = "<your-mqtt-username>"
-  password = "<your-mqtt-password>"
-```
-
-3. Install InfluxDB or any other DB supported by Telegraf
-
-4. Add the fitting output plugin to your Telegraf configuration:
+Add to an existing configuration:
 
 ```toml
-[[outputs.influxdb]]
-  urls = ["http://<host>:<port>"]
-  token = "<your-influxdb-token>"
-  organization = "<your-influxdb-org>"
-  bucket = "<your-influxdb-bucket>"
+[processing]
+only_on_change = true
+heartbeat_interval = 3600
 ```
 
-5. Depending on your setup: As the websocket-events and grabber don't differentiate if only one or multiple subvalues of an control had been updated you might end up with a lot of duplicate data (e.g. Energy Meters). To mitigate filling your DB with useless data consider using the [dedup-plugin](https://github.com/influxdata/telegraf/tree/master/plugins/processors/dedup) and/or [final-aggregator-plugin](https://github.com/influxdata/telegraf/tree/master/plugins/aggregators/final). The following settings can reduce the amount of data significantly without sacrificing real insights:
+Without this table, existing configs retain write-every-observation behavior.
+The new template enables change-only writes. Comparison happens per UUID,
+source and field after optional rounding. A timer reemits unchanged values at
+the heartbeat interval only while the WebSocket session is healthy. Polling
+fields additionally need a recent observation (within two polling intervals plus
+one request timeout). Disconnection clears cached observations. Set the heartbeat
+interval to zero to disable reemission.
 
-```toml
-[[processors.dedup]]
-  ## Maximum time to suppress output
-  dedup_interval = "60"
-  [processors.dedup.tagpass]
-    application = ["loxInFlux"]
+Polling still happens at `general.grabber_interval`: suppressing writes reduces
+database volume, not requests to the Miniserver. Visualized controls remain the
+way to get immediate events without polling. `drop_redundant_default = true`
+optionally drops a numeric Default only when another numeric output has exactly
+the same value; disabled by default because equality alone does not prove that
+two outputs represent the same quantity.
 
-[[aggregators.final]]
-  period = "30s"
-  drop_original = true
-  keep_original_field_names = true
-  output_strategy = "periodic"
-  [aggregators.final.tagpass]
-    type = ["MeterAbsBi","MeterDig","MeterAbsUni","MeterAbsSt"]
+## Health and metrics
+
+Default address: `0.0.0.0:9108`, configurable in `[monitoring]`.
+
+| Endpoint | Meaning |
+| --- | --- |
+| `/health`, `/ready` | 200 when dependencies work; isolated unreadable poll responses report `degraded: true`. Connection/authentication errors or a completely unreadable polling cycle return 503. |
+| `/live` | HTTP server is running, including during startup |
+| `/metrics` | Prometheus text exposition |
+
+Malformed Miniserver JSON is parsed strictly first. A bounded fallback can repair
+unescaped complete JSON objects/arrays inside sensor strings (for example an
+EMS-ESP status string) and literal control characters in those strings. The
+repaired document is validated again; status and target UUID checks still apply.
+Ambiguous quotes, broken structure and invalid numbers are not guessed.
+
+An unrecoverable individual response clears that control's cached observations
+and increments `loxtotelegraf_grabber_data_errors_total`. Other controls continue;
+`/health` includes `degraded` and `grabber_unreadable_controls`. If every poll is
+unreadable, readiness fails. Authentication, transport and correlation errors
+continue to fail readiness even when another control responds. Successful later
+cycles clear the current degradation. Repairs are counted separately in
+`loxtotelegraf_grabber_json_repaired_total`; neither metric includes raw payloads.
+
+For Uptime Kuma, use an HTTP monitor pointing at `http://HOST:9108/health` with
+expected status 200. No sensor changes are required to stay healthy. Docker
+healthchecks invoke `loxtotelegraf --healthcheck`; no curl is required. If monitoring
+is disabled, disable the container healthcheck as well.
+
+Counters include received/written/filtered/invalid/unchanged/dropped values,
+written points and bytes, heartbeat fields, output errors, grabber requests and
+errors, configuration reloads and WebSocket reconnects. Gauges expose queue
+depth/capacity, control counts, readiness, uptime and last receive/write times.
+Metrics have no UUID/name labels, avoiding per-control cardinality.
+
+`values_written_total` counts fields successfully handed to the transport, not
+database commits. UDP cannot confirm a receiver exists; TCP and MQTT QoS 0
+cannot confirm storage in InfluxDB. MQTT counts a write after the client flushes
+the publish to its socket. Monitor Telegraf/database errors separately.
+
+## Performance and delivery
+
+A single Tokio I/O runtime avoids a worker thread per event. Static line-protocol
+prefixes and field keys are precomputed. Numeric lookup uses the client's binary
+UUID map. Values traverse a bounded channel without JSON conversion, UUID string
+formatting, or spawning per-value tasks. The consumer drains available events in
+batches and reuses its serialization buffer. It does not wait to fill a batch.
+Configuration download/decompression/parsing is outside the measurement hot path.
+
+TCP/stdout/MQTT batch writes; UDP packs complete newline-terminated points into
+datagrams capped by `udp_max_bytes`. A single oversize UDP point fails explicitly;
+use TCP or a larger configured limit for large text/output sets. Transport errors
+retain and retry the batch with its original timestamps. A partial TCP write may
+therefore be replayed. The queue is in memory and is not a persistent delivery log.
+
+The pinned client's callbacks are synchronous. If the bounded queue fills, the
+application counts the loss and stops with an error rather than continuing with
+an unreported gap. This is a deliberate, observable limit, not a lossless-delivery
+claim. Increase `queue_capacity`, improve the output, or lower volume for sustained
+overload. SIGTERM/SIGINT stop producers and drain the queue, bounded by
+`shutdown_timeout`. Execd uses nonblocking pipe I/O on Unix so a full stdout pipe
+does not prevent process shutdown.
+
+Existing configs without `udp_max_bytes` retain the maximum UDP payload of 65507
+bytes. The new template uses 1400 bytes to limit fragmentation; choose TCP for
+large multi-output controls. UDP batching cannot make UDP delivery reliable.
+
+For Docker builds behind a private CA, the Dockerfile accepts an optional
+BuildKit secret without embedding certificates in the image or disabling TLS:
+`docker build --secret id=build_ca,src=/path/to/ca-bundle.pem -t loxtotelegraf:local .`.
+
+## Validation
+
+```sh
+cargo fmt --all -- --check
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked --all-targets
+cargo bench --locked --bench pipeline
 ```
 
-### LoxInFlux Configuration
+Tests include actual encrypted WebSocket authentication against a fake Miniserver,
+secured polling, reconnection, UDP/TCP/MQTT delivery, health, malformed containers,
+precision regressions, filtering and deduplication. See [migration notes](docs/migration.md)
+for the source audit and [performance notes](docs/performance.md) for measurements.
+The tests do not connect to production hardware or databases.
 
-Configuration is done via a TOML file. Create a copy of the default configuration and adjust it to your needs:
+The [November optimization report](docs/optimization-2026-11-04.md) records paired
+CPU/allocation measurements, retained-heap measurements, the real Miniserver
+fixture results and the frame-batching experiment. Reproduce additional probes:
 
-### Essential Settings
-
-```toml
-[general]
-grabber = true  # Enable/disable the grabber functionality - Default true
-grabber_interval = 300  # Interval in which grabber grabs data from miniserver in seconds - Default 300
-round_floats = true  # Optional: enable/disable float rounding - Default true
-rounding_precision = 5   # Optional: number of decimal places to round to - Default 5
-
-[miniserver]
-host = "192.168.1.100"  # Your Miniserver IP
-port = 80               # Miniserver port (usually 80)
-user = "your-username"  # Miniserver username
-password = "your-pass"  # Miniserver password
-visu_password = "your-visu-pass" # Optional: Set if you have visualization password secured controls 
-max_reconnect_attempts = 0 # Optional (Default: 0): number of retries to establish connection to miniserver if connection is lost. Not set / set to 0 will result in unlimited retries - Default 0
-
-[telegraf]
-host = "192.168.1.101"  # Telegraf IP
-port = 8086             # Telegraf port
-protocol = "udp"        # Protocol: "udp", "tcp", "execd", or "mqtt"
-max_retries = 0 # Optional (Default: 0): number of retries to establish connection (only relevant for mqtt and tcp). 0 will result in unlimited retries
-
-[telegraf.mqtt] # Optional: only relevant if protocol is mqtt
-host = "192.168.1.102" # IP address telegraf instance, e.g. 192.168.0.100 - no prefix or port
-port = 1883 # Port of telegraf instance
-username = "mqttuser"  # Optional
-password = "mqttuserpassword"  # Optional
-topic = "loxone/metrics" # Topic to send metrics to
-client_id = "loxinflux" # Client ID for telegraf instance
+```sh
+cargo bench --locked --bench hotpaths
+cargo bench --locked --bench mqtt # local loopback broker
+cargo bench --locked --bench frame_queue # experiment, not the production path
+cargo run --locked --release --example allocation_probe -- /path/to/export.xml
 ```
 
-### Optional Settings
-```toml
-[logging]
-level = "INFO"          # TRACE, DEBUG, INFO, WARNING, ERROR, CRITICAL - Optional - if not set, defaults to INFO 
+The [second allocation pass](docs/optimization-followup-2026-11-04.md) adds compact
+shared routes, history-free processing when deduplication is disabled, fewer
+JSON allocations and streaming cache writes. It includes five paired runs and a
+full WebSocket-to-TCP loopback benchmark:
 
-[paths]
-data_dir = "data"       # Cache directory for Loxone configurations
+```sh
+cargo bench --locked --bench bridge
+LOX_XML_BENCH=/path/to/export.xml cargo bench --locked --bench cache
 ```
 
-### Filtering
-
-The configuration allows blacklisting/whitelisting of specific control types and UUIDs. This can be useful to reduce data volume or focus on specific metrics. The default_config.toml contains a list of recommended blacklist items:
-
-```toml
-[filters]
-type_blacklist = [
-    "SWITCH",
-    "PUSHBUTTON",
-    # ... see default_config.toml for a complete list
-]
-
-[filters.websocket] # Optional: Filter controls for websocket protocol if a type or uuid generates too much traffic/data. It is recommended though to use telegraf processors / aggregators for filtering as it is more efficient.
-type_blacklist = [
-]
-type_whitelist = [
-]
-uuid_blacklist = [
-]
-uuid_whitelist = [
-]
-
-[filters.grabber] # Optional: Filter controls for grabber protocol if a type or uuid generates too much traffic/data. It is recommended though to use telegraf processors / aggregators for filtering as it is more efficient.
-type_blacklist = [
-]
-type_whitelist = [
-]
-uuid_blacklist = [
-]
-uuid_whitelist = [
-]
-```
-
-## Credits and Inspiration
-
-This project was inspired by and builds upon the work of several other projects:
-
-- [The folks at Loxberry](https://github.com/mschlenstedt/Loxberry) / [Stats4Lox (NG)](https://github.com/mschlenstedt/LoxBerry-Plugin-Stats4Lox-NG): For the original idea of a plugin that collects data from the Miniserver and forwards it to Telegraf, their relentless work for the Loxone Community and sheer masterful work on Loxberry and its main plugins
-- [JoDehli (PyLoxone, pyloxone-api)](https://github.com/JoDehli/PyLoxone): For the Loxone Miniserver communication protocol implementation I adapted the websocket listener from
-- [Alladdin](https://github.com/Alladdin): For his Loxone related reference implementation and research
-- [Node-Red-Contrib-Loxone](https://github.com/codmpm/node-red-contrib-loxone): For the Node-Red Loxone plugin, which made testing much easier and provided valueable insights in handling the websocket communication
-- [Loxone](https://www.loxone.com/enen/kb/api/): For building such a great home automation ecosystem and providing the openness to build upon it
-- [Stats4Lox (NG)](https://github.com/mschlenstedt/LoxBerry-Plugin-Stats4Lox-NG): For the original idea of a plugin that collects data from the Miniserver and forwards it to Telegraf
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

@@ -1,8 +1,10 @@
 [general]
 grabber = true  # Enable/disable the grabber functionality - Default true
-round_floats = true  # Optional: enable/disable float rounding - Default true
+round_floats = false # Preserve the full received f64 precision; old configs retain their setting
 rounding_precision = 5   # Optional: number of decimal places to round to - Default 5
 grabber_interval = 300  # Interval in which grabber grabs data from miniserver in seconds - Default 300
+grabber_concurrency = 10
+config_refresh_interval = 300 # 0 disables periodic checks; reconnect still checks
 
 [logging]
 level = "INFO" # TRACE, DEBUG, INFO, WARNING, ERROR, CRITICAL - Optional - if not set, defaults to INFO 
@@ -21,8 +23,13 @@ data_dir = "data" # Directory for storing cached Loxone configurations - Default
 [telegraf]
 host = "192.168.1.101" # IP address telegraf instance, e.g. 192.168.0.100 - no prefix or port
 port = 8086
-protocol = "udp"  # Can be "udp", "tcp", "execd" (logs to stdout), or "mqtt" - Default udp
+protocol = "udp"  # "udp", "tcp", "execd" (metrics to stdout, logs to stderr), or "mqtt"
 max_retries = 0 # Optional (Default: 0): number of retries to establish connection (only relevant for mqtt and tcp). 0 will result in unlimited retries
+queue_capacity = 65536
+batch_size = 512
+udp_max_bytes = 1400 # Points are never split across datagrams; use TCP for larger points
+write_timeout = 10
+shutdown_timeout = 15
 
 
 [telegraf.mqtt] # Optional: only relevant if protocol is mqtt
@@ -117,3 +124,18 @@ uuid_blacklist = [
 ]
 uuid_whitelist = [
 ]
+
+[processing]
+# New template: suppress unchanged values. Existing configs without this table
+# keep the legacy write-every-observation behavior.
+only_on_change = true
+heartbeat_interval = 3600 # seconds; 0 disables heartbeats
+drop_empty = true
+drop_placeholders = true
+parse_numeric_units = true
+separate_text_fields = true # e.g. __text__Default; all numeric field names stay stable
+drop_redundant_default = false # optional; only drops an exactly equal numeric Default
+
+[monitoring]
+enabled = true
+listen = "0.0.0.0:9108"
