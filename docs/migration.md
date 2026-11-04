@@ -1,6 +1,46 @@
 # Migration and source audit
 
-Reference implementation: local loxInFlux 0.3.0 source, its test suite and
+## Upgrading from 0.3 to 0.5
+
+loxInFlux 0.5.0 replaces the Python implementation (0.3.x) with a Rust binary.
+The configuration loads unchanged; the written data does not. The list of
+breaking changes is in the [README](../README.md#breaking-changes-in-050).
+
+1. **Pin the old version first.** Change `acidcliff/loxinflux:latest` to
+   `acidcliff/loxinflux:0.3` in your compose file so the production writer does
+   not switch on its own.
+2. **Check the configuration** with the new image:
+   `docker run --rm -v "$PWD/config:/app/config:ro" acidcliff/loxinflux:0.5 --check-config`.
+   Remove the entries that are reported as deprecated.
+3. **Run a pilot next to production.** Start a second container with a copy of
+   the configuration that writes to a fresh bucket or a separate Telegraf
+   output. Compare numeric values, UUID and field counts and field types. Check
+   AQ decimals, `__text__*` fields, `/health`, queue depth, dropped values and
+   Telegraf write errors. Both versions can poll the same Miniserver; they need
+   separate data directories.
+4. **Decide what happens to the history.** Every numeric field is a float from
+   0.5 on. Fields that 0.3 stored as integers or strings in the same bucket
+   reject the new points with `field type conflict`. Either
+   - switch production to a fresh bucket and query the old one for history, or
+   - convert the old field types to float before switching. The
+     [InfluxDB v2 migration script](https://gist.github.com/BetaWayOfLife/69eefad3cf5a0e97bc3251c03fc6d898)
+     from [PR #6](https://github.com/Jakob-Gliwa/loxInFlux/pull/6) reads,
+     coerces, deletes and rewrites one month at a time, and defaults to a dry
+     run. Take a backup and stop loxInFlux while it runs.
+5. **Switch production** to `:0.5`, keep the same `/app/config` and `/app/data`
+   mounts, and optionally map port 9108 for health and metrics.
+6. **Optionally enable change-only writes** (`processing.only_on_change = true`
+   with `heartbeat_interval = 3600`). Adapt graph fill and rate windows to the
+   sparser data.
+
+**Rollback:** go back to `acidcliff/loxinflux:0.3.0`. The 0.3 cache files in
+`/app/data` are untouched by 0.5. Float points that 0.5 already wrote stay in
+the bucket and will in turn conflict with 0.3's integer writes, which is another
+reason to pilot against a separate bucket.
+
+## Source audit
+
+Reference implementation: local loxInFlux 0.3.0 (Python) source, its test suite and
 `cursor_error_writing_metrics_to_influxd.md`. The supplied 30-day analysis was
 used to identify field precision/type conflicts, invalid placeholder traffic,
 and redundant periodic writes; its database counts were not independently

@@ -95,6 +95,8 @@ fresh-bucket/history-migration requirement in the migration guide still applies.
   for `latest`, and release retraction on failed gates. Current Rust CI gates
   container builds on all tests and does not publish. Any future publication
   workflow must retain those four rules and both architecture manifests.
+  *Resolved in 0.5.0:* `release.yml` keeps all four rules (version check against
+  `Cargo.toml`) and publishes amd64 and arm64.
 - [Issue #3](https://github.com/Jakob-Gliwa/loxInFlux/issues/3) also reported an
   absent arm64 manifest and continuing malformed JSON errors. The comments do
   **not** establish a final diagnosis/fix for that JSON symptom. Rust creates a
