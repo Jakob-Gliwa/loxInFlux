@@ -50,12 +50,12 @@ jobs:
       - name: Audit dependencies
         run: cargo audit
 
-  # --- TEST STAGE (native amd64, arm64 and macOS) ---
+  # --- TEST STAGE (native amd64 and arm64, the platforms the image ships) ---
   test:
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     steps:
@@ -86,6 +86,30 @@ jobs:
 
       - name: Load the unmodified 0.3 configuration template
         run: target/release/loxinflux --config-file tests/fixtures/legacy_config.toml --check-config
+
+  # --- MACOS TEST (for local development; not a gate) ---
+  # Hosted macOS runners can queue for a long time. The image is Linux-only, so
+  # this job reports on its own and the build stage does not wait for it.
+  test-macos:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component clippy
+          rustup override set "$RUST_TOOLCHAIN"
+
+      - name: Cache the cargo registry and target directory
+        uses: Swatinem/rust-cache@v2
+
+      - name: Lint
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Run tests
+        run: cargo test --locked --all-targets
 
   # --- BUILD STAGE (one native runner per platform, no QEMU) ---
   build:

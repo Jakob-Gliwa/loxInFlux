@@ -44,11 +44,13 @@ jobs:
         run: cargo audit
 
   # --- TEST STAGE (gate the release on green tests; mirrors ci.yml) ---
+  # Only the platforms the image ships: a macOS runner queue must not be able to
+  # stall a release while the GitHub Release is already public.
   test:
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     steps:
