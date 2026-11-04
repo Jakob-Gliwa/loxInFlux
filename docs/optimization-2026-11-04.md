@@ -27,9 +27,9 @@ tokens, status codes or response identity. Normal LL status and target UUID
 validation also runs after repair. No numeric rounding or float conversion policy
 was changed; `serde_json` retains `float_roundtrip`.
 
-Successful repairs increment `loxtotelegraf_grabber_json_repaired_total`; the
+Successful repairs increment `loxinflux_grabber_json_repaired_total`; the
 first repair also emits a warning. An unreadable response increments
-`loxtotelegraf_grabber_data_errors_total` and the existing grabber error counter.
+`loxinflux_grabber_data_errors_total` and the existing grabber error counter.
 Raw payloads are not logged. The failed control's last observation is invalidated
 through the ordered input queue, preventing stale heartbeat output.
 
@@ -42,7 +42,7 @@ Readiness distinguishes data quality from operational failure:
 | Every polled response is unreadable | HTTP 503 |
 | Transport, authentication, status or correlation failure | HTTP 503 |
 
-`loxtotelegraf_grabber_unreadable_controls` and the corresponding `/health` JSON
+`loxinflux_grabber_unreadable_controls` and the corresponding `/health` JSON
 field show the count from the most recently completed cycle. A later clean cycle
 clears degradation. An empty polling set does not fail readiness.
 

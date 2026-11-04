@@ -1,7 +1,7 @@
 //! Compare MQTT write time and allocations on identical input before/after edits.
 //! Timing is measured WITHOUT allocation instrumentation; allocation counts come
 //! from one separate warmed call. Uses only a local loopback broker.
-use loxtotelegraf::{
+use loxinflux::{
     config::{Protocol, Telegraf},
     metrics::Metrics,
     pipeline::Batch,

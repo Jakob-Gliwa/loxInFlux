@@ -176,7 +176,7 @@ async fn run_bridge(config: Config, metrics: Arc<Metrics>, stop: CancellationTok
     } else {
         TlsMode::Insecure
     };
-    ws.client_info = format!("loxToTelegraf {}", env!("CARGO_PKG_VERSION"));
+    ws.client_info = format!("loxInFlux {}", env!("CARGO_PKG_VERSION"));
     ws.max_reconnect_attempts = config.miniserver.max_reconnect_attempts;
     ws.command_timeout_secs = config.miniserver.request_timeout;
     // In 0.3.2, dropping connect() before it returns detaches the supervisor

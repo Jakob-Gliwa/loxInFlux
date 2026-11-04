@@ -4,7 +4,8 @@ This pass re-enumerated the remote branches and all PR states, checked the
 previous commit inventories, and compared the component boundaries against the
 current Rust implementation. It supplements the [loxInFlux history audit](history-audit.md)
 and the [two relay audit passes](relay-audit.md). The source repositories were
-read only; changes and regression tests are in loxToTelegraf.
+read only; changes and regression tests are in the Rust implementation
+(developed as loxToTelegraf, released as loxInFlux 0.5.0).
 
 ## Pinned references
 

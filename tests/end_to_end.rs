@@ -3,7 +3,7 @@
 #[path = "support/loxwebsocket/mod.rs"]
 mod common;
 use common::{FakeConfig, FakeMiniserver, TEST_PASSWORD, TEST_USER, TEST_VISU_PASSWORD};
-use loxtotelegraf::{
+use loxinflux::{
     app,
     config::{Config, Protocol},
 };
@@ -141,7 +141,7 @@ async fn encrypted_websocket_polling_health_cache_and_shutdown_work_together() {
         .text()
         .await
         .unwrap();
-    assert!(metrics.contains("loxtotelegraf_values_dropped_total 0"));
+    assert!(metrics.contains("loxinflux_values_dropped_total 0"));
     assert!(dir.path().join("configuration-cache.json").exists());
     stop.cancel();
     timeout(Duration::from_secs(10), task)

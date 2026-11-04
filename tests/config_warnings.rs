@@ -9,7 +9,7 @@ fn check_config_warns_on_ignored_keys_without_logging_values() {
         "[telegraf]\nprotocol='execd'\nround_floats=true\nround_decimals='private-sentinel'\n",
     )
     .unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_loxtotelegraf"))
+    let output = Command::new(env!("CARGO_BIN_EXE_loxinflux"))
         .env_remove("RUST_LOG")
         .args([
             "--config-file",

@@ -2,7 +2,7 @@
 //! Timing is measured WITHOUT allocation instrumentation; allocation counts come
 //! from one separate warmed call. No network and no private XML is checked in.
 use bytes::Bytes;
-use loxtotelegraf::{
+use loxinflux::{
     config::Config,
     controls,
     metrics::Metrics,

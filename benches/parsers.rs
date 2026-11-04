@@ -1,7 +1,7 @@
 //! Compare parser CPU time and allocations on identical input before/after edits.
 //! Timing is measured WITHOUT allocation instrumentation; allocation counts come
 //! from one separate warmed call. No network and no private XML is checked in.
-use loxtotelegraf::{config::Config, controls, metrics::Metrics, pipeline::parse_grabber};
+use loxinflux::{config::Config, controls, metrics::Metrics, pipeline::parse_grabber};
 use std::{
     alloc::{GlobalAlloc, Layout, System},
     hint::black_box,
@@ -79,7 +79,7 @@ fn main() {
     let mut rounded = numeric.general.clone();
     rounded.round_floats = true;
     measure("number / round to 5", n * 10, || {
-        loxtotelegraf::value::number(black_box(21.23456789123456), &rounded).unwrap()
+        loxinflux::value::number(black_box(21.23456789123456), &rounded).unwrap()
     });
     measure("grabber / 2 fields", n, || {
         parse_grabber(black_box(simple), &numeric, &metrics).unwrap()

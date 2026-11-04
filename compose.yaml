@@ -1,7 +1,7 @@
 services:
-  loxtotelegraf:
+  loxinflux:
     build: .
-    image: loxtotelegraf:local
+    image: loxinflux:local
     restart: unless-stopped
     stop_grace_period: 40s
     ports:

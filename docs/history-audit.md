@@ -109,7 +109,7 @@ fresh-bucket/history-migration requirement in the migration guide still applies.
 cargo fmt --all -- --check
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked --all-targets
-cargo build --locked --release --bin loxtotelegraf
+cargo build --locked --release --bin loxinflux
 ```
 
 The new HTTP checks are in `tests/loader_regressions.rs`; heartbeat, normalization,

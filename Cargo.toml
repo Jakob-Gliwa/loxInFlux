@@ -1,9 +1,10 @@
 [package]
-name = "loxtotelegraf"
-version = "0.1.0"
+name = "loxinflux"
+version = "0.5.0"
 edition = "2024"
 rust-version = "1.99"
-description = "Loxone to Telegraf bridge, compatible with loxInFlux configuration"
+description = "Loxone Miniserver to Telegraf bridge (Influx line protocol)"
+repository = "https://github.com/Jakob-Gliwa/loxInFlux"
 license = "MIT"
 
 [dependencies]
@@ -66,7 +67,7 @@ harness = false
 all = "warn"
 
 [[bin]]
-name = "loxtotelegraf"
+name = "loxinflux"
 path = "src/main.rs"
 
 [[bench]]

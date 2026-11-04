@@ -1,15 +1,12 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use loxtotelegraf::config::Config;
+use loxinflux::config::Config;
 use std::{path::PathBuf, time::Duration};
 use tokio_util::sync::CancellationToken;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
-#[command(
-    version,
-    about = "Loxone → Telegraf, compatible with loxInFlux TOML configurations"
-)]
+#[command(version, about = "Loxone Miniserver → Telegraf (Influx line protocol)")]
 struct Args {
     #[arg(long, default_value = "config", env = "CONFIG_DIR")]
     config_dir: PathBuf,
@@ -45,8 +42,8 @@ async fn main() -> Result<()> {
     };
     tracing_subscriber::fmt()
         .with_ansi(false)
-        .event_format(loxtotelegraf::logging::EventFormat {
-            execd: config.telegraf.protocol == loxtotelegraf::config::Protocol::Execd,
+        .event_format(loxinflux::logging::EventFormat {
+            execd: config.telegraf.protocol == loxinflux::config::Protocol::Execd,
         })
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or(EnvFilter::try_new(level)?))
         .with_writer(std::io::stderr)
@@ -80,7 +77,7 @@ async fn main() -> Result<()> {
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),
         arch = std::env::consts::ARCH,
-        "Starting loxToTelegraf"
+        "Starting loxInFlux"
     );
     let stop = CancellationToken::new();
     let signal = stop.clone();
@@ -98,7 +95,7 @@ async fn main() -> Result<()> {
         }
         signal.cancel();
     });
-    let result = loxtotelegraf::app::run(config, stop)
+    let result = loxinflux::app::run(config, stop)
         .await
         .context("Bridge stopped");
     signals.abort();

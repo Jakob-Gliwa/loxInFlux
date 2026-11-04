@@ -1,5 +1,5 @@
 scrape_configs:
-  - job_name: loxtotelegraf
+  - job_name: loxinflux
     scrape_interval: 30s
     static_configs:
-      - targets: ["loxtotelegraf:9108"]
+      - targets: ["loxinflux:9108"]

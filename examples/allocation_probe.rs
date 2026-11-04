@@ -2,7 +2,7 @@
 //! Tracks requested live heap bytes, not RSS or allocator overhead. Never use
 //! these instrumented runs for CPU timings. Prints counts, never control names.
 use bytes::Bytes;
-use loxtotelegraf::{
+use loxinflux::{
     config::Config,
     controls,
     metrics::Metrics,
@@ -80,7 +80,7 @@ fn main() {
         size_of::<Input>(),
         size_of::<controls::Route>(),
         size_of::<controls::PollControl>(),
-        size_of::<loxtotelegraf::value::Value>()
+        size_of::<loxinflux::value::Value>()
     );
     let config =
         Config::parse(&std::fs::read_to_string("tests/fixtures/legacy_config.toml").unwrap())
@@ -136,7 +136,7 @@ fn main() {
         std::hint::black_box(Bytes::copy_from_slice(&[b'x'; 100]));
     });
     allocations("text normalization alone", || {
-        std::hint::black_box(loxtotelegraf::value::text(
+        std::hint::black_box(loxinflux::value::text(
             "plain text",
             &config.general,
             &config.processing,

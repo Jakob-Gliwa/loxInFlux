@@ -146,7 +146,7 @@ local export; no private export was added to the repository.
 
 ## What was already correct or deliberately not copied
 
-| Relay idea / fix | Decision for loxToTelegraf |
+| Relay idea / fix | Decision for loxInFlux |
 | --- | --- |
 | Immutable config, precomputed routes, ArcSwap and lazy logging (`1620d68`, `4d56cd7`) | Already present. Extended borrowing in the poll loop; no per-value locks or LRU added. |
 | Firmware-17 bare LoxCC, CRC/length validation, reconnect resync (`76ea033`, `73dc8ed`) | Already covered; HTTP loader uses pooled requests and preserves old routes when refresh fails. |

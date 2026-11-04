@@ -4,7 +4,7 @@
 #[path = "../tests/support/loxwebsocket/mod.rs"]
 mod common;
 use common::{FakeConfig, FakeMiniserver, TEST_PASSWORD, TEST_USER};
-use loxtotelegraf::{
+use loxinflux::{
     app,
     config::{Config, Protocol},
 };

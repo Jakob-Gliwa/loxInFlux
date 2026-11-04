@@ -4,7 +4,7 @@ use axum::{
     body::Body,
     http::{Request, Response, StatusCode},
 };
-use loxtotelegraf::{archive, config::Config, miniserver::Loader};
+use loxinflux::{archive, config::Config, miniserver::Loader};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},

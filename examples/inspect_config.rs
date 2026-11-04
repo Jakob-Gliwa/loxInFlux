@@ -2,12 +2,12 @@
 use anyhow::{Context, Result};
 fn main() -> Result<()> {
     let mut args = std::env::args().skip(1);
-    let config = loxtotelegraf::config::Config::load(std::path::Path::new(
+    let config = loxinflux::config::Config::load(std::path::Path::new(
         &args.next().context("config.toml path")?,
     ))?;
     let xml = std::fs::read(args.next().context("configuration.xml path")?)?;
     let start = std::time::Instant::now();
-    let c = loxtotelegraf::controls::parse(&xml, &config)?;
+    let c = loxinflux::controls::parse(&xml, &config)?;
     eprintln!(
         "XML bytes: {}; routes: {}; grabber: {}; parse: {:?}",
         xml.len(),

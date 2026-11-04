@@ -209,7 +209,7 @@ impl Metrics {
         ] {
             let _ = writeln!(
                 out,
-                "# HELP loxtotelegraf_{name}_total {help}\n# TYPE loxtotelegraf_{name}_total counter\nloxtotelegraf_{name}_total {value}"
+                "# HELP loxinflux_{name}_total {help}\n# TYPE loxinflux_{name}_total counter\nloxinflux_{name}_total {value}"
             );
         }
         for (name, value) in [
@@ -233,7 +233,7 @@ impl Metrics {
         ] {
             let _ = writeln!(
                 out,
-                "# TYPE loxtotelegraf_{name} gauge\nloxtotelegraf_{name} {value}"
+                "# TYPE loxinflux_{name} gauge\nloxinflux_{name} {value}"
             );
         }
         for (name, value) in [
@@ -253,12 +253,12 @@ impl Metrics {
         ] {
             let _ = writeln!(
                 out,
-                "# TYPE loxtotelegraf_{name} gauge\nloxtotelegraf_{name} {value}"
+                "# TYPE loxinflux_{name} gauge\nloxinflux_{name} {value}"
             );
         }
         let _ = writeln!(
             out,
-            "# TYPE loxtotelegraf_build_info gauge\nloxtotelegraf_build_info{{version=\"{}\"}} 1",
+            "# TYPE loxinflux_build_info gauge\nloxinflux_build_info{{version=\"{}\"}} 1",
             env!("CARGO_PKG_VERSION")
         );
         out
@@ -350,6 +350,6 @@ mod tests {
                 .to_vec(),
         )
         .unwrap();
-        assert!(text.contains("loxtotelegraf_values_received_total 0"));
+        assert!(text.contains("loxinflux_values_received_total 0"));
     }
 }

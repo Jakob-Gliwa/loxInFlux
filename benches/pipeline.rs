@@ -1,5 +1,5 @@
 //! CPU-only: routing, conversion, deduplication and serialization. No network.
-use loxtotelegraf::{
+use loxinflux::{
     config::Config,
     controls,
     metrics::Metrics,
