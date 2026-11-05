@@ -1,5 +1,23 @@
-target
-.git
-data
-config/config.toml
+# The build stage copies Cargo.toml, Cargo.lock, src/ and benches/ explicitly,
+# so this list is a second line of defence rather than the mechanism. It matters
+# most for `target/`, which is large and whose host artifacts are useless to a
+# musl build.
+target/
+
+.git/
+.gitignore
+.github/
+
+# The operator's own configuration and cache. Neither belongs in an image; both
+# are mounted at runtime.
+config/
+data/
+
+# Read by the tests and humans, not needed to build.
+tests/
+docs/
+examples/
+scripts/
+
 .DS_Store
+*.log

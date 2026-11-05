@@ -61,7 +61,9 @@ to migrate, pin `acidcliff/loxinflux:0.3` (or `:0.3.0`) in your compose file.
    `__text__<field>` (for example `__text__Default`), so a field never mixes
    numbers and text. Empty values and Loxone placeholders such as `<v.i>` are
    dropped and counted instead of being written.
-4. **Python is gone.** The image runs the `loxinflux` binary directly; the old
+4. **Python is gone.** The image is `FROM scratch` with a single static binary
+   (about 4 MB compressed instead of 59 MB). There is no shell in the container,
+   so `docker exec … sh` no longer works; logs still go to `docker logs`. The old
    `docker-entrypoint.sh` no longer exists. `loxInFlux` stays available as an
    alias, and `CONFIG_DIR`, `DATA_DIR`, `LOG_LEVEL`, `--config-dir`, `--data-dir`
    and `--log-level` work as before. The cache in `/app/data` has a new format
@@ -111,7 +113,11 @@ configuration HTTP endpoints require a Miniserver user with full access.
 | `experimental` | Current `main`, not released yet |
 | `experimental-<branch>`, `experimental-<sha>` | Builds of a branch or commit for testing |
 
-Images are published for `linux/amd64` and `linux/arm64`.
+Images are published for `linux/amd64` and `linux/arm64`. They contain only the
+statically linked binary (built with musl for the baseline CPU of each
+architecture, so any x86-64 machine and any 64-bit Raspberry Pi works) and the
+CA certificate bundle. To inspect the container from the outside, use
+`docker logs loxinflux`, `curl http://HOST:9108/health` or `/metrics`.
 
 ## Configuration
 
