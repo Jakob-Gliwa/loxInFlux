@@ -1,0 +1,4 @@
+{"LL": { "control": "dev/sps/io/00000000-0000-0002-ffff000000000001/all", "value": "19.8°", "Code": "200",
+    "output0": { "name": "AQ", "nr": 1, "value": 19.800},
+    "output1": { "name": "Q", "nr": 2, "value": 0}
+}}

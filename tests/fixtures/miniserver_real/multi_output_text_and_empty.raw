@@ -1,0 +1,14 @@
+{"LL": { "control": "dev/sps/io/00000000-0000-0004-ffff000000000001/all", "value": "21.000", "Code": "200",
+    "output0": { "name": "AQt", "nr": 1, "value": 21.000},
+    "output1": { "name": "TxQr", "nr": 2, "value": "Kinderzimmer"},
+    "output2": { "name": "AQf", "nr": 3, "value": 30.370},
+    "output3": { "name": "AQb", "nr": 4, "value": 35.370},
+    "output4": { "name": "Qp", "nr": 5, "value": 1},
+    "output5": { "name": "AQr", "nr": 6, "value": 11.894},
+    "output6": { "name": "AQl", "nr": 7, "value": 20.621},
+    "output7": { "name": "AQi", "nr": 8, "value": 0.886},
+    "output8": { "name": "Qe", "nr": 9, "value": 0},
+    "output9": { "name": "API", "nr": 10, "value": ""},
+    "SpecialState0": { "uuid": "00000000-0000-0004-ffff000000000002", "nr": 1, "value": 0.000},
+    "SpecialState1": { "uuid": "00000000-0000-0004-ffff000000000003", "nr": 2, "value": 8.000}
+}}

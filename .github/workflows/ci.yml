@@ -1,13 +1,14 @@
 name: CI (Build, Test & Experimental)
 
-# Validation + experimental channel:
+# Validation plus the experimental channel:
 #   * pull_request      -> test + multi-arch build ONLY (never pushes)
-#   * push to main /
-#     workflow_dispatch -> test + build + push the experimental image
-#                          (:experimental and :experimental-<sha>)
+#   * push to main      -> test + build + push :experimental
+#   * workflow_dispatch -> same as a push; on any other branch it pushes
+#                          :experimental-<branch>, to try a branch before it lands
 #
-# Versioned releases (0.2.0, 0.2, latest) are published exclusively by
-# release.yml when a GitHub Release is published.
+# Every image from here carries an :experimental prefix. The versioned tags and
+# the moving :latest are published exclusively by release.yml, so a merge to main
+# can never reach anyone who pulls :latest.
 
 on:
   workflow_dispatch:
@@ -26,117 +27,95 @@ permissions:
 
 env:
   IMAGE_NAME: ${{ vars.DOCKER_USERNAME }}/loxinflux
+  RUST_TOOLCHAIN: "1.99.0"
+  CARGO_TERM_COLOR: always
 
 jobs:
-  # --- TEST STAGE ---
-  test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v6
-
-      # setup-uv installs uv, manages the Python toolchain (pinned to 3.14) and
-      # persists uv's real cache (~/.cache/uv) across runs out of the box.
-      - name: Install uv (with cache)
-        uses: astral-sh/setup-uv@v8.2.0
-        with:
-          enable-cache: true
-          python-version: "3.14"
-
-      - name: Sync dependencies (incl. dev group)
-        run: uv sync --locked
-
-      # Ruff lint gate (hard): fail the build on any lint finding or formatting
-      # drift across BOTH production source and the test-suite.
-      - name: Lint (ruff)
-        run: |
-          uv run ruff check src tests
-          uv run ruff format --check src tests
-
-      # Hard test + coverage gate: the build FAILS on any test failure or if
-      # total coverage drops below the --cov-fail-under floor. Coverage flags
-      # live here (not in pyproject addopts) so targeted local runs don't trip
-      # the gate. Live tests are excluded (they need real Miniserver creds).
-      - name: Run tests (with coverage gate)
-        run: >
-          uv run pytest -m "not live"
-          --cov=loxInFlux
-          --cov-report=term-missing
-          --cov-report=xml
-          --cov-fail-under=88
-
-  # --- PACKAGE SMOKE (build a wheel, install it clean, import + CLI) ---
-  package-smoke:
+  # --- AUDIT STAGE ---
+  # Against the advisory database as it is today, not as it was when the
+  # lockfile last changed - so an advisory published against an unchanged tree
+  # fails the next run. Accepted advisories live in .cargo/audit.toml.
+  audit:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Check out source
         uses: actions/checkout@v6
 
-      - name: Install uv (with cache)
-        uses: astral-sh/setup-uv@v8.2.0
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
         with:
-          enable-cache: true
-          python-version: "3.14"
+          tool: cargo-audit
 
-      - name: Build sdist + wheel
-        run: uv build
+      - name: Audit dependencies
+        run: cargo audit
 
-      # Install the freshly built wheel into a throwaway venv (no editable/src
-      # path) and prove the packaged distribution imports and exposes its CLI.
-      - name: Install wheel into a fresh venv and smoke-test
-        run: |
-          set -euo pipefail
-          uv venv /tmp/smoke-venv --python 3.14
-          wheel="$(ls dist/*.whl)"
-          uv pip install --python /tmp/smoke-venv "$wheel"
-          /tmp/smoke-venv/bin/python -c "import loxInFlux; print(loxInFlux.__version__)"
-          /tmp/smoke-venv/bin/loxInFlux --help
-
-  # --- ARM SMOKE (import + parser smoke on native arm64) ---
-  arm-smoke:
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 15
+  # --- TEST STAGE (native amd64 and arm64, the platforms the image ships) ---
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
     steps:
       - name: Check out source
         uses: actions/checkout@v6
 
-      - name: Install uv (with cache)
-        uses: astral-sh/setup-uv@v8.2.0
-        with:
-          enable-cache: true
-          python-version: "3.14"
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component rustfmt,clippy
+          rustup override set "$RUST_TOOLCHAIN"
 
-      - name: Sync dependencies
-        run: uv sync --locked
+      - name: Cache the cargo registry and target directory
+        uses: Swatinem/rust-cache@v2
 
-      # The Docker build produces an arm64 image but never runs the Python code
-      # there, so prove the arch-specific deps (lxml/lz4/pygixml) import AND work
-      # on native arm64. pygixml_active() resolves the CPU probe (the probe is
-      # lazy, so reading ACTIVE_XML_PARSER straight after the import would only
-      # report the un-resolved lxml baseline) and needs no config.
-      - name: Report XML parser selection
-        run: >
-          uv run python -c "from loxInFlux import miniserver;
-          miniserver.pygixml_active();
-          print('parser:', miniserver.ACTIVE_XML_PARSER, '-', miniserver.XML_PARSER_REASON)"
+      - name: Check formatting
+        run: cargo fmt --all -- --check
 
-      # Run the real suite instead of a hand-written parser snippet. The snippet
-      # this replaces duplicated the app's startup bootstrap and broke the moment
-      # the config singleton became explicit (get_config() now requires
-      # init_config(), and config.toml is not in the repo). pytest's conftest owns
-      # that bootstrap, so this cannot drift from the API again.
-      - name: Run tests on native arm64
-        run: uv run pytest -m "not live" -q
+      - name: Lint
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Run tests
+        run: cargo test --locked --all-targets
+
+      # A release build catches what a debug one does not: the `strip` and
+      # `lto` settings and the binary actually linking.
+      - name: Build the release binary
+        run: cargo build --locked --release
+
+      - name: Load the unmodified 0.3 configuration template
+        run: target/release/loxinflux --config-file tests/fixtures/legacy_config.toml --check-config
+
+  # --- MACOS TEST (for local development; not a gate) ---
+  # Hosted macOS runners can queue for a long time. The image is Linux-only, so
+  # this job reports on its own and the build stage does not wait for it.
+  test-macos:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component clippy
+          rustup override set "$RUST_TOOLCHAIN"
+
+      - name: Cache the cargo registry and target directory
+        uses: Swatinem/rust-cache@v2
+
+      - name: Lint
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Run tests
+        run: cargo test --locked --all-targets
 
   # --- BUILD STAGE (one native runner per platform, no QEMU) ---
   build:
-    # Gate the image on ALL validation jobs, not just unit tests: otherwise the
-    # experimental image could be pushed on main while package-smoke/arm-smoke
-    # are red (they have no dependency edge to build/merge on their own).
-    needs: [test, package-smoke, arm-smoke]
+    needs: [audit, test]
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -154,10 +133,17 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v6
 
+      - name: Extract Docker image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_NAME }}
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      # Only authenticate when we are actually going to push (not on PRs).
+      # Only authenticate when we are actually going to push (not on PRs), so a
+      # fork PR does not need the registry credentials at all.
       - name: Log in to Docker Registry
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
@@ -165,7 +151,7 @@ jobs:
           username: ${{ vars.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # PR: build only, prove it compiles on this platform, never push.
+      # PR: prove it compiles on this platform and never push.
       - name: Build image (PR validation, no push)
         if: github.event_name == 'pull_request'
         uses: docker/build-push-action@v7
@@ -176,7 +162,6 @@ jobs:
           cache-from: type=gha,scope=${{ env.PLATFORM_PAIR }}
           cache-to: type=gha,mode=max,scope=${{ env.PLATFORM_PAIR }}
 
-      # main / manual dispatch: push each platform by digest for the manifest.
       - name: Build and push by digest (experimental)
         id: build
         if: github.event_name != 'pull_request'
@@ -184,11 +169,45 @@ jobs:
         with:
           context: .
           platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true,oci-mediatypes=true
           provenance: true
           sbom: true
           cache-from: type=gha,scope=${{ env.PLATFORM_PAIR }}
           cache-to: type=gha,mode=max,scope=${{ env.PLATFORM_PAIR }}
+
+      # Start the image the way the README tells people to: config mounted at
+      # /app/config, no arguments. The check only passes if the binary resolved
+      # CONFIG_DIR from the image and accepted the unmodified 0.3 template.
+      # `--load` is a cache hit against the build above, so this costs seconds.
+      - name: Smoke-test the image
+        run: |
+          set -euo pipefail
+          docker buildx build --platform "${{ matrix.platform }}" --load \
+            -t loxinflux:smoke \
+            --cache-from type=gha,scope=${{ env.PLATFORM_PAIR }} .
+
+          version="$(docker run --rm loxinflux:smoke --version)"
+          echo "$version"
+          crate="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
+          if [ "$version" != "loxinflux $crate" ]; then
+            echo "::error::image reports '$version', Cargo.toml says $crate" >&2
+            exit 1
+          fi
+
+          # The 0.3 entrypoint ran `loxInFlux`; the alias must keep working.
+          docker run --rm --entrypoint loxInFlux loxinflux:smoke --version
+
+          mkdir -p smoke/config
+          cp tests/fixtures/legacy_config.toml smoke/config/config.toml
+          out="$(docker run --rm --network none \
+            -v "$PWD/smoke/config:/app/config:ro" loxinflux:smoke --check-config 2>&1)"
+          echo "$out"
+          if ! grep -q 'Configuration valid: /app/config/config.toml' <<<"$out"; then
+            echo "::error::the image did not validate the mounted configuration" >&2
+            exit 1
+          fi
 
       - name: Export digest
         if: github.event_name != 'pull_request'
@@ -212,6 +231,7 @@ jobs:
     # Skip entirely on PRs — nothing was pushed to merge.
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Download digests
         uses: actions/download-artifact@v7
@@ -230,10 +250,17 @@ jobs:
           DOCKER_METADATA_ANNOTATIONS_LEVELS: index
         with:
           images: ${{ env.IMAGE_NAME }}
-          # Moving :experimental plus an immutable :experimental-<short-sha>
-          # you can pin and try out.
+          # latest=false: this workflow must never be able to move :latest, no
+          # matter which branch or event it runs for. That tag belongs to
+          # release.yml alone.
+          flavor: |
+            latest=false
+          # A moving tag per branch (:experimental for main,
+          # :experimental-<branch> for a dispatched branch) plus an immutable
+          # :experimental-<short-sha> you can pin and roll back to.
           tags: |
-            type=raw,value=experimental
+            type=raw,value=experimental,enable={{is_default_branch}}
+            type=ref,event=branch,prefix=experimental-,enable=${{ github.ref_name != github.event.repository.default_branch }}
             type=sha,prefix=experimental-,format=short
 
       - name: Log in to Docker Registry

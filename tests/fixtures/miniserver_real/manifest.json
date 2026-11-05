@@ -1,0 +1,74 @@
+[
+  {
+    "file": "malformed_unescaped_quotes_in_output_value.raw",
+    "uuid": "00000000-0000-0001-ffff000000000001",
+    "strict_json_valid": false,
+    "covers": "INVALID JSON: output value is JSON text with unescaped quotes (EMS-ESP wwcircmode status)"
+  },
+  {
+    "file": "unit_string_with_output_ports.raw",
+    "uuid": "00000000-0000-0002-ffff000000000001",
+    "strict_json_valid": true,
+    "covers": "value '19.8°' (number+unit), AQ and Q outputs"
+  },
+  {
+    "file": "placeholder_value.raw",
+    "uuid": "00000000-0000-0003-ffff000000000001",
+    "strict_json_valid": true,
+    "covers": "value '<v.i>' (unresolved Loxone placeholder) plus numeric outputs"
+  },
+  {
+    "file": "multi_output_text_and_empty.raw",
+    "uuid": "00000000-0000-0004-ffff000000000001",
+    "strict_json_valid": true,
+    "covers": "many outputs: numeric, text (TxQr) and empty strings"
+  },
+  {
+    "file": "empty_api_output_and_special_state.raw",
+    "uuid": "00000000-0000-0005-ffff000000000001",
+    "strict_json_valid": true,
+    "covers": "empty 'API' output and SpecialState* keys"
+  },
+  {
+    "file": "plain_output_key_empty_status.raw",
+    "uuid": "00000000-0000-0006-ffff000000000001",
+    "strict_json_valid": true,
+    "covers": "single 'output' key (no index), empty string value, 'icon'/'color' members"
+  },
+  {
+    "file": "plain_output_key_text_state.raw",
+    "uuid": "00000000-0000-0007-ffff000000000001",
+    "strict_json_valid": true,
+    "covers": "single 'output' key with real text value and a non-ASCII output name"
+  },
+  {
+    "file": "output_without_name.raw",
+    "uuid": "00000000-0000-0008-ffff000000000001",
+    "strict_json_valid": true,
+    "covers": "output with empty name"
+  },
+  {
+    "file": "textvalue_not_implemented.raw",
+    "uuid": "00000000-0000-0009-ffff000000000001",
+    "strict_json_valid": true,
+    "covers": "contains the literal 'TextValue, not Implemented'"
+  },
+  {
+    "file": "unit_string_watts_in_output.raw",
+    "uuid": "00000000-0000-000a-ffff000000000001",
+    "strict_json_valid": true,
+    "covers": "contains the literal '-331 W'"
+  },
+  {
+    "file": "text_enum_value.raw",
+    "uuid": "00000000-0000-000b-ffff000000000001",
+    "strict_json_valid": true,
+    "covers": "contains the literal 'Nur heizen'"
+  },
+  {
+    "file": "text_assignment_like_number.raw",
+    "uuid": "00000000-0000-000c-ffff000000000001",
+    "strict_json_valid": true,
+    "covers": "contains the literal 'PL=3'"
+  }
+]

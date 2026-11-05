@@ -1,0 +1,91 @@
+[package]
+name = "loxinflux"
+version = "0.5.0"
+edition = "2024"
+rust-version = "1.99"
+description = "Loxone Miniserver to Telegraf bridge (Influx line protocol)"
+repository = "https://github.com/Jakob-Gliwa/loxInFlux"
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+arc-swap = "1.9"
+axum = "0.8"
+bytes = "1"
+clap = { version = "4", features = ["derive", "env"] }
+crc32fast = "1"
+futures-util = "0.3"
+itoa = "1"
+loxwebsocket = "=0.3.2"
+lz4_flex = "0.14"
+quick-xml = "0.41"
+regex = "1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+rumqttc = { version = "0.25", default-features = false }
+ryu = "1"
+rustix = { version = "1", features = ["fs"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+tokio = { version = "1", features = ["rt", "macros", "net", "time", "sync", "io-util", "io-std", "fs", "signal"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+toml = "1.1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+zip = { version = "9.1.3", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+
+[dev-dependencies]
+aes = "0.9"
+cbc = { version = "0.2", features = ["alloc"] }
+percent-encoding = "2.3"
+base64 = "0.23"
+hex = "0.4"
+hmac = "0.13"
+rand = "0.8"
+rsa = { version = "0.9", features = ["pem"] }
+sha1 = "0.11"
+sha2 = "0.11"
+zerocopy = "0.8"
+tempfile = "3"
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+
+[[bench]]
+name = "pipeline"
+harness = false
+
+[[bench]]
+name = "parsers"
+harness = false
+
+[lints.clippy]
+all = "warn"
+
+[[bin]]
+name = "loxinflux"
+path = "src/main.rs"
+
+[[bench]]
+name = "hotpaths"
+harness = false
+
+[[bench]]
+name = "mqtt"
+harness = false
+
+[[bench]]
+name = "frame_queue"
+harness = false
+
+[[bench]]
+name = "bridge"
+harness = false
+
+[[bench]]
+name = "cache"
+harness = false

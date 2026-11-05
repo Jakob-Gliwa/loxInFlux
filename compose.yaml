@@ -1,0 +1,11 @@
+services:
+  loxinflux:
+    build: .
+    image: loxinflux:local
+    restart: unless-stopped
+    stop_grace_period: 40s
+    ports:
+      - "9108:9108"
+    volumes:
+      - ./config:/app/config:ro
+      - ./data:/app/data
