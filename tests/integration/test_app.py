@@ -213,13 +213,14 @@ async def test_text_message_with_additional_outputs(
     }
     await bridge.handle_text_messages(message, 0)
 
-    # Exact line-protocol: Default + the named output field (both int-coerced ->
-    # "i" suffix) and the frozen ns timestamp added by the multi-output branch.
+    # Exact line-protocol: Default + the named output field (fork: both coerced to
+    # float, never an "i" integer suffix) and the frozen ns timestamp added by the
+    # multi-output branch.
     expected = (
         deepcopy(control["pointInflux"])
         .tag("source", "grabber")
-        .field("Default", 10)
-        .field("Power", 5)
+        .field("Default", 10.0)
+        .field("Power", 5.0)
         .time(_FIXED_NS)
         .to_line_protocol()
         .encode()
