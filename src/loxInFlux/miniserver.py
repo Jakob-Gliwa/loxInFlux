@@ -1,3 +1,5 @@
+import asyncio
+import ftplib
 import os
 import os.path
 import re
@@ -57,6 +59,32 @@ _ZIP_MAGIC = b"PK"
 # member. ``/data/LoxAPP3.json`` is the documented endpoint for the *running*
 # program's structure file, i.e. exactly what a bare ``.LoxCC`` corresponds to.
 _LOXAPP3_JSON_PATH = "data/LoxAPP3.json"
+
+
+def _ftp_download_newest_config(
+    host: str, username: str, password: str, port: int = 21
+) -> tuple[str, bytes]:
+    """Fork: FTP fallback for Miniserver users WITHOUT full access rights.
+
+    ``/dev/fslist`` + ``/dev/fsget`` need a user with *full access*; a read-only
+    service user (FTP permission only) gets 403 there. Granting full access to a
+    service account whose password lives on another host is a needless risk, so
+    on 403 the newest config is listed and downloaded over FTP instead (as before
+    0.3.0). Blocking ftplib, run via ``asyncio.to_thread``. Returns
+    ``(filename, raw_bytes)``; the payload is decoded by ``_decode_config_payload``
+    exactly like the HTTP download.
+    """
+    with ftplib.FTP() as ftp:
+        ftp.connect(host, port, timeout=30)
+        ftp.login(username, password)
+        ftp.cwd("/prog")
+        names = [n.rsplit("/", 1)[-1] for n in ftp.nlst()]
+        filename = _select_newest_config_file("\n".join(names))
+        if filename is None:
+            raise Exception("No configuration files found (FTP)")
+        buf = BytesIO()
+        ftp.retrbinary(f"RETR {filename}", buf.write)
+        return filename, buf.getvalue()
 
 
 def _select_newest_config_file(listing: str) -> str | None:
@@ -655,28 +683,46 @@ async def load_miniserver_config(
         ) as session:
             # List /prog (plain-text listing, one entry per line) and pick the
             # newest sps_<ver>_<ts>.(zip|LoxCC).
+            listing: str | None = None
             async with session.get(
                 f"{base_url}/dev/fslist/prog/",
                 allow_redirects=True,
                 ssl=False,  # Disable SSL verification
             ) as response:
-                response.raise_for_status()
-                listing = await response.text()
+                if response.status != 403:
+                    response.raise_for_status()
+                    listing = await response.text()
 
-            filename = _select_newest_config_file(listing)
-            if filename is None:
-                raise Exception("No configuration files found")
+            if listing is None:
+                # Fork: user without full access -> FTP fallback (see
+                # _ftp_download_newest_config). LoxAPP3.json still comes over HTTP
+                # below, which any user with visualisation rights may read.
+                logger.warning(
+                    "/dev/fslist answered 403 (user has no full access) - "
+                    "loading the configuration over FTP instead"
+                )
+                filename, raw = await asyncio.to_thread(
+                    _ftp_download_newest_config,
+                    get_config().miniserver.host,
+                    username,
+                    password,
+                )
+                logger.info("Selected configuration file (FTP): %s", filename)
+            else:
+                filename = _select_newest_config_file(listing)
+                if filename is None:
+                    raise Exception("No configuration files found")
 
-            logger.info("Selected configuration file: %s", filename)
+                logger.info("Selected configuration file: %s", filename)
 
-            # Download the selected archive
-            async with session.get(
-                f"{base_url}/dev/fsget/prog/{filename}",
-                allow_redirects=True,
-                ssl=False,  # Disable SSL verification
-            ) as response:
-                response.raise_for_status()
-                raw = await response.read()
+                # Download the selected archive
+                async with session.get(
+                    f"{base_url}/dev/fsget/prog/{filename}",
+                    allow_redirects=True,
+                    ssl=False,  # Disable SSL verification
+                ) as response:
+                    response.raise_for_status()
+                    raw = await response.read()
 
             # Extract and decompress the configuration. The payload is either the
             # deployment ZIP or a bare LoxCC container; _decode_config_payload
