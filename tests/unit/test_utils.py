@@ -34,10 +34,11 @@ from loxInFlux.utils import (
 # --------------------------------------------------------------------------- #
 
 
-def test_numeric_int_string():
+def test_numeric_int_string_becomes_float():
+    # Fork: always float, never int (InfluxDB field type conflicts otherwise).
     result = get_numeric_value_if_possible("42")
-    assert result == 42
-    assert isinstance(result, int)
+    assert result == 42.0
+    assert isinstance(result, float)
 
 
 def test_numeric_float_string():
@@ -54,9 +55,23 @@ def test_numeric_scientific_notation_is_float():
     assert get_numeric_value_if_possible("1e3") == 1000.0
 
 
-def test_numeric_int_input_passthrough():
-    # int() of an int succeeds, so it is returned unchanged.
-    assert get_numeric_value_if_possible(7) == 7
+def test_numeric_int_input_becomes_float():
+    result = get_numeric_value_if_possible(7)
+    assert result == 7.0
+    assert isinstance(result, float)
+
+
+def test_numeric_value_with_unit():
+    get_config().general.round_floats = False
+    assert get_numeric_value_if_possible("523ppm") == 523.0
+    assert get_numeric_value_if_possible("-5.2 °C") == -5.2
+    assert get_numeric_value_if_possible("65%") == 65.0
+
+
+def test_numeric_dates_and_times_stay_text():
+    assert get_numeric_value_if_possible("2026-07-09") == "2026-07-09"
+    assert get_numeric_value_if_possible("12:34") == "12:34"
+    assert get_numeric_value_if_possible(None) is None
 
 
 def test_numeric_rounding_applied_when_configured():

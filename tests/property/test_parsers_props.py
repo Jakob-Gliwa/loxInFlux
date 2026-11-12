@@ -8,8 +8,8 @@ Covers, mirroring the loxwebsocket property-test idioms, but asserting real
 * ``miniserver._is_lz4_frame``: classifies by leading magic - it recognises the
   standard/legacy/skippable frame magics (and anything ``compress_lz4_frame``
   produces) and rejects every other 4-byte prefix.
-* ``utils.get_numeric_value_if_possible``: its int/float/passthrough result
-  matches Python's own ``int``/``float`` coercion funnel exactly.
+* ``utils.get_numeric_value_if_possible``: always float (fork), numbers with a
+  unit become the number, everything else passes through unchanged.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from support.loxcc import compress_lz4_block, compress_lz4_frame
 
 from loxInFlux.config import get_config
 from loxInFlux.miniserver import _decompress_loxcc_block_lz4, _is_lz4_frame
-from loxInFlux.utils import get_numeric_value_if_possible
+from loxInFlux.utils import _NUMERIC_WITH_UNIT, get_numeric_value_if_possible
 
 
 # --------------------------------------------------------------------------- #
@@ -96,11 +96,13 @@ def _looks_numeric(text: str) -> bool:
         return False
 
 
-@given(st.integers(min_value=-(10**18), max_value=10**18))
-def test_integer_strings_coerce_to_int(n):
+@given(st.integers(min_value=-(10**15), max_value=10**15))
+def test_integer_strings_coerce_to_float(n):
+    # Fork: always float, never int.
+    get_config().general.round_floats = False
     result = get_numeric_value_if_possible(str(n))
-    assert result == n
-    assert isinstance(result, int)
+    assert result == float(n)
+    assert isinstance(result, float)
 
 
 @given(st.floats(allow_nan=False, allow_infinity=False))
@@ -114,34 +116,28 @@ def test_float_strings_coerce_to_float(f):
 @given(st.text(max_size=64))
 def test_non_numeric_text_passes_through(text):
     assume(not _looks_numeric(text))
+    assume(not _NUMERIC_WITH_UNIT.match(text))
     result = get_numeric_value_if_possible(text)
     assert result is text
 
 
 @given(st.text(max_size=64))
 def test_numeric_coercion_matches_python_semantics(text):
-    """Real invariant (not just crash-freedom): the result equals what Python's
-    own ``int``/``float`` funnel yields - ``int`` first, then ``float``, else the
-    original string returned unchanged."""
+    """Fork invariant: anything float() accepts becomes that float; a number with a
+    trailing unit becomes the number; everything else is returned unchanged."""
     get_config().general.round_floats = False  # pin: no rounding, exact results
     result = get_numeric_value_if_possible(text)
-
     try:
-        expected_int = int(text)
+        expected = float(text)
     except ValueError:
-        pass
-    else:
-        assert isinstance(result, int)
-        assert result == expected_int
-        return
-
-    try:
-        expected_float = float(text)
-    except ValueError:
-        assert result is text
-    else:
-        assert isinstance(result, float)
-        if math.isnan(expected_float):
-            assert math.isnan(result)  # NaN != NaN, so compare structurally
+        m = _NUMERIC_WITH_UNIT.match(text)
+        if m:
+            assert result == float(m.group(1))
         else:
-            assert result == expected_float
+            assert result is text
+        return
+    assert isinstance(result, float)
+    if math.isnan(expected):
+        assert math.isnan(result)
+    else:
+        assert result == expected

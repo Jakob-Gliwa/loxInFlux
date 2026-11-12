@@ -686,3 +686,92 @@ def test_decode_config_payload_zip_magic_without_archive():
     # and the failure comes from zipfile itself rather than the magic check.
     with pytest.raises(zipfile.BadZipFile):
         miniserver_mod._decode_config_payload(b"PK")
+
+
+# --------------------------------------------------------------------------- #
+# Fork: FTP fallback when /dev/fslist answers 403 (user without full access)   #
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+async def test_fslist_403_falls_back_to_ftp(monkeypatch):
+    xml = _valid_xml()
+    bare = loxcc.build_loxcc_block(xml)
+    session = fakes.FakeAiohttpSession()
+    session.add_route("/dev/fslist/prog/", fakes.FakeHTTPResponse(status=403))
+    session.add_route(
+        "/data/LoxAPP3.json",
+        fakes.FakeHTTPResponse(
+            body=orjson.dumps(loxcc.build_loxapp3(last_modified="2026-11-12 08:05:06"))
+        ),
+    )
+    _patch_session(monkeypatch, session)
+    calls = []
+
+    def fake_ftp(host, user, password):
+        calls.append((host, user, password))
+        return "sps_0281_20261112080508.LoxCC", bare
+
+    monkeypatch.setattr(miniserver_mod, "_ftp_download_newest_config", fake_ftp)
+
+    config_content, loxapp3_json = await load_miniserver_config("leser", "pw")
+
+    assert config_content == xml
+    assert loxapp3_json["lastModified"] == "2026-11-12 08:05:06"
+    assert calls == [("127.0.0.1", "leser", "pw")]
+    urls = [url for url, _ in session.requests]
+    assert not any("/dev/fsget/" in u for u in urls)
+
+
+@pytest.mark.asyncio
+async def test_fslist_other_errors_do_not_fall_back(monkeypatch):
+    session = fakes.FakeAiohttpSession()
+    session.add_route(
+        "/dev/fslist/prog/",
+        fakes.FakeHTTPResponse(status=500, raise_for_status=RuntimeError("boom")),
+    )
+    _patch_session(monkeypatch, session)
+    monkeypatch.setattr(
+        miniserver_mod,
+        "_ftp_download_newest_config",
+        lambda *a: pytest.fail("FTP must only be used on 403"),
+    )
+    with pytest.raises(RuntimeError):
+        await load_miniserver_config("leser", "pw")
+
+
+def test_ftp_helper_picks_newest_and_downloads(monkeypatch):
+    class FakeFTP:
+        befehle: list = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def connect(self, host, port, timeout):
+            FakeFTP.befehle.append(("connect", host, port))
+
+        def login(self, user, password):
+            FakeFTP.befehle.append(("login", user))
+
+        def cwd(self, d):
+            FakeFTP.befehle.append(("cwd", d))
+
+        def nlst(self):
+            return [
+                "/prog/sps_0274_20261026113606.zip",
+                "/prog/sps_0281_20261112080508.LoxCC",
+                "/prog/Emergency.LoxCC",
+            ]
+
+        def retrbinary(self, cmd, cb):
+            FakeFTP.befehle.append(("retr", cmd))
+            cb(b"abc")
+            cb(b"def")
+
+    monkeypatch.setattr(miniserver_mod.ftplib, "FTP", FakeFTP)
+    name, raw = miniserver_mod._ftp_download_newest_config("10.0.0.1", "leser", "pw")
+    assert name == "sps_0281_20261112080508.LoxCC"
+    assert raw == b"abcdef"
+    assert ("retr", "RETR sps_0281_20261112080508.LoxCC") in FakeFTP.befehle
+    assert ("cwd", "/prog") in FakeFTP.befehle
