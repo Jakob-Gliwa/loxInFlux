@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 ![Docker Pulls](https://img.shields.io/docker/pulls/acidcliff/loxinflux)
-![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/jakob-gliwa/loxInFlux/main.yml)
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/jakob-gliwa/loxInFlux/ci.yml)
 [![Static Badge](https://img.shields.io/badge/get_it-on_Docker_Hub-blue)](https://hub.docker.com/r/acidcliff/loxinflux)
 
 
@@ -119,7 +119,7 @@ Project is built with uv, so you can install it with uv.
 As one core component of LoxInFlux is written in C(ython), you need to make sure to have a C compiler installed (e.g. gcc).
 
 Requirements:
-- Python 3.13 or higher
+- Python 3.14 or higher
 
 To build clone the repo and run in the root folder:
 ```bash

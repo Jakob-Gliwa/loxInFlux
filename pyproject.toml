@@ -4,45 +4,119 @@ build-backend = "hatchling.build"
 
 [project]
 name = "loxInFlux"
-version = "0.2.0"
+version = "0.3.0"
 description = "Loxone to InfluxDB Bridge"
 authors = [
     { name = "Jakob Gliwa", email = "your.email@example.com" }
 ]
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
-    "pycryptodome>=3.23.0",
-    "lxml>=6.0.2",
+    "lxml>=6.1.1",
     "lz4>=4.4.5",
-    "influxdb-client>=1.49.0",
-    "aioftp>=0.27.2",
+    "influxdb-client>=1.50.0",
     "aiofiles>=25.1.0",
-    "orjson>=3.11.5",
+    "orjson>=3.11.9",
     "uvloop>=0.22.1",
-    "aiohttp>=3.13.3",
-    "tomli>=2.3.0",
+    "aiohttp>=3.14.2",
     "gmqtt>=0.7.0",
     "construct>=2.10.70",
-    "loxwebsocket>=0.5.2"
+    "loxwebsocket>=0.6.0",
+    "pygixml>=0.12.1"
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
+# PEP 735 dependency group (not a publishable package extra): installed by
+# default via ``uv sync`` and excluded from production builds with ``--no-dev``.
 dev = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-cov>=4.1.0",
-    "setuptools>=69.0.0"
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "pytest-timeout>=2.4.0",
+    "setuptools>=83.0.0",
+    "ruff>=0.15.20",
+    "hypothesis>=6.158.0",
+    "python-dotenv>=1.2.2"
 ]
 
 [project.scripts]
 loxInFlux = "loxInFlux.app:main"
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]   
+# Tests run against the ``uv sync``-installed (editable) package, so only the
+# ``tests`` dir needs to be on the path (``support`` helpers live there).
+pythonpath = ["tests"]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
+# Coverage flags intentionally live in the CI invocation, not here, so targeted
+# local runs (a single test/file) don't fail the coverage gate.
+addopts = "-ra --strict-markers --strict-config"
+xfail_strict = true
+timeout = 60
+# Per-item ``timeout`` does not cover collection/conftest import (eager config
+# load + pygixml subprocess probe run there). A session-wide timeout bounds the
+# whole run, including collection, so a stalled import can't hang indefinitely.
+session_timeout = 120
+filterwarnings = [
+    "error",
+]
+markers = [
+    "live: tests that talk to a real Miniserver (require LOXINFLUX_* credentials; skipped in CI and when creds are absent)",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["loxInFlux"]
+omit = [
+    "tests/*",
+    "benchmarks/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "\\.\\.\\.",
+]
 
 [tool.uv]
-native-tls = true
+system-certs = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/loxInFlux"]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 88
+src = ["src"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes (undefined names, unused imports/vars)
+    "I",      # isort (import ordering)
+    "B",      # flake8-bugbear (common bugs & anti-patterns)
+    "ASYNC",  # flake8-async (asyncio pitfalls)
+    "SIM",    # flake8-simplify
+    "UP",     # pyupgrade
+    "C4",     # flake8-comprehensions
+]
+ignore = [
+    "E501",  # line length is handled by the formatter
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["loxInFlux"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # re-exports are expected in package inits
+# Micro-benchmarks deliberately read attributes without storing them to measure
+# traversal cost, which B018 would otherwise flag as useless.
+"benchmarks/*" = ["B018"]
