@@ -69,9 +69,24 @@ class LoxoneGrabber:
 
         tasks = []
         _, _, grabber_controls = await self.controlGetter()
+        # Fork (19.11.2026): Visu-passwortgeschuetzte Controls nur abfragen, wenn ein Visu-Passwort konfiguriert ist.
+        # Ohne Passwort verwarf der Miniserver die verschluesselte Abfrage frueher still ("Unrecognized command");
+        # seit Firmware 17.3 schliesst er dafuer die ganze Websocket-Verbindung (Code 4020) - die Reconnect-Schleife
+        # fuehrte dann zur IP-Sperre des Miniservers und zu einem Datenausfall.
+        hat_visu_pw = bool(get_config().miniserver.visu_password)
+        uebersprungen = 0
         for uuid, control in grabber_controls.items():
+            if control["VisuPwd"] and not hat_visu_pw:
+                uebersprungen += 1
+                continue
             task = asyncio.create_task(self.send_command(uuid, control["VisuPwd"]))
             tasks.append(task)
+        if uebersprungen and not getattr(self, "_visu_hinweis", False):
+            logger.info(
+                "Grabber: %d visu-passwortgeschuetzte Controls uebersprungen (kein visu_password konfiguriert)",
+                uebersprungen,
+            )
+            self._visu_hinweis = True
 
         if tasks:
             await asyncio.gather(*tasks)

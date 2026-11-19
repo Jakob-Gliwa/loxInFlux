@@ -205,6 +205,30 @@ async def test_grab_all_values_dispatches_by_visu_pwd():
 
 
 @pytest.mark.asyncio
+async def test_grab_all_values_skips_secured_without_visu_password(monkeypatch):
+    # Fork (19.11.2026): ohne visu_password keine verschluesselte Abfrage - Firmware 17.3 trennt sonst die Verbindung.
+    monkeypatch.setattr(get_config().miniserver, "visu_password", None)
+    ws = _FakeWS(state="CONNECTED")
+    grabber = LoxoneGrabber()
+    grabber.ws_client = ws
+    grabber_controls = {
+        b"plain": {"VisuPwd": False},
+        b"secured": {"VisuPwd": True},
+    }
+
+    async def getter():
+        return {}, {}, grabber_controls
+
+    grabber.controlGetter = getter
+
+    await grabber._grab_all_values()
+    await grabber._grab_all_values()
+
+    assert ws.unsecured == [("plain", "all"), ("plain", "all")]
+    assert ws.secured == []
+
+
+@pytest.mark.asyncio
 async def test_grab_all_values_decodes_builder_byte_uuids(sample_controls):
     # A2 roundtrip: grabber_controls from getControlsFromConfigXML are keyed by
     # UUID *bytes*; every dispatched command must carry a decoded str UUID.
