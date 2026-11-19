@@ -12,7 +12,13 @@ logger = get_lazy_logger(__name__)
 class LoxoneGrabber:
     def __init__(self):
         self._shutdown_event = asyncio.Event()
-        self.semaphore = asyncio.Semaphore(10)
+        # Fork (19.11.2026): EIN Befehl zur Zeit und eine kurze Pause danach. Firmware 17.3 (Sicherheitsupdate
+        # 17.3.11.10) trennt die Websocket-Verbindung mit Code 4020, wenn ~1900 Grabber-Befehle innerhalb einer
+        # Sekunde eintreffen; die Reconnect-Schleife fuehrte dann zur IP-Sperre des Miniservers. Einzeln mit
+        # ~20 Befehlen/s laufen alle Abfragen durch (gemessen). Die Reihenfolge schuetzt zusaetzlich den
+        # Salt-Wechsel (nextSalt) von loxwebsocket vor Ueberholern.
+        self.semaphore = asyncio.Semaphore(1)
+        self.pause_s = 0.05
 
     async def start(self, controls_getter: Callable[[], tuple[dict, dict, dict]]):
         self.ws_client = loxwebsocket
@@ -54,6 +60,7 @@ class LoxoneGrabber:
                         uuid, "all", get_config().miniserver.visu_password
                     )
                 logger.debug("Grabber-Befehl für UUID gesendet: %s", uuid)
+                await asyncio.sleep(self.pause_s)
             except Exception as e:
                 logger.error(
                     "Fehler beim Senden des Grabber-Befehls für UUID %s: %s",

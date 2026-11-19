@@ -229,6 +229,60 @@ async def test_grab_all_values_skips_secured_without_visu_password(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_grab_all_values_sends_strictly_in_order():
+    # Fork (19.11.2026): Verschluesseln und Senden duerfen sich zwischen zwei Befehlen nicht ueberlappen -
+    # sonst kommt ein Befehl mit neuem Salt vor der nextSalt-Ankuendigung an (Firmware 17.3: Code 4020).
+    ablauf: list[str] = []
+
+    class _SaltWS(_FakeWS):
+        async def send_websocket_command(self, uuid, command) -> None:
+            ablauf.append("enc:" + uuid)   # loxwebsocket: encrypt() ist synchron ...
+            await asyncio.sleep(0)         # ... gesendet wird erst nach einem await
+            ablauf.append("send:" + uuid)
+
+    ws = _SaltWS(state="CONNECTED")
+    grabber = LoxoneGrabber()
+    grabber.ws_client = ws
+    controls = {f"u{i}".encode(): {"VisuPwd": False} for i in range(5)}
+
+    async def getter():
+        return {}, {}, controls
+
+    grabber.controlGetter = getter
+    await grabber._grab_all_values()
+
+    assert len(ablauf) == 10
+    for i in range(0, 10, 2):
+        assert ablauf[i].startswith("enc:") and ablauf[i + 1] == "send:" + ablauf[i][4:]
+
+
+@pytest.mark.asyncio
+async def test_grab_all_values_paces_commands(monkeypatch):
+    # Fork (19.11.2026): zwischen zwei Befehlen eine Pause - Firmware 17.3 trennt bei ~1900 Befehlen/s.
+    pausen: list[float] = []
+    echt = asyncio.sleep
+
+    async def zaehl_sleep(s, *a, **k):
+        pausen.append(s)
+        await echt(0)
+
+    monkeypatch.setattr(grabber_mod.asyncio, "sleep", zaehl_sleep)
+    ws = _FakeWS(state="CONNECTED")
+    grabber = LoxoneGrabber()
+    grabber.ws_client = ws
+    controls = {f"p{i}".encode(): {"VisuPwd": False} for i in range(4)}
+
+    async def getter():
+        return {}, {}, controls
+
+    grabber.controlGetter = getter
+    await grabber._grab_all_values()
+
+    assert len(ws.unsecured) == 4
+    assert [p for p in pausen if p >= 0.02] == [grabber.pause_s] * 4 and grabber.pause_s >= 0.02
+
+
+@pytest.mark.asyncio
 async def test_grab_all_values_decodes_builder_byte_uuids(sample_controls):
     # A2 roundtrip: grabber_controls from getControlsFromConfigXML are keyed by
     # UUID *bytes*; every dispatched command must carry a decoded str UUID.
