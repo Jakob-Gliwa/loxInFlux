@@ -130,6 +130,7 @@ stderr.
 [general]
 grabber = true            # poll controls that are not visualized
 grabber_interval = 300    # seconds
+grabber_rate_limit = 900  # max grabber commands per second, 0 = unlimited
 round_floats = false      # keep the full received precision
 rounding_precision = 5    # decimal places when round_floats = true
 
@@ -167,6 +168,21 @@ separate_text_fields = true
 enabled = true
 listen = "0.0.0.0:9108"
 ```
+
+### Grabber rate limit
+
+Since firmware 17.3.11 the Miniserver closes the WebSocket with code 4020 when
+commands arrive in a burst, and then blocks the client's IP for a while
+([issue #11](https://github.com/Jakob-Gliwa/loxInFlux/issues/11)). Measurements
+there saw no disconnect up to about 260 commands per second and a disconnect at
+about 2,000. The grabber therefore sends at most `general.grabber_rate_limit`
+commands per second (default 900), in addition to keeping at most
+`grabber_concurrency` requests in flight. A VisuPwd-secured control costs two
+commands. At 900 per second, 2,000 polled controls take a little over two
+seconds per cycle.
+
+If the log shows WebSocket reconnects right after a polling cycle starts, lower
+the limit, for example to 250. `0` removes the limit.
 
 ### Filtering
 

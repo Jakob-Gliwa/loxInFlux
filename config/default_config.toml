@@ -4,6 +4,7 @@ round_floats = false # Preserve the full received f64 precision; old configs ret
 rounding_precision = 5   # Optional: number of decimal places to round to - Default 5
 grabber_interval = 300  # Interval in which grabber grabs data from miniserver in seconds - Default 300
 grabber_concurrency = 10
+grabber_rate_limit = 900 # Max grabber commands per second; 0 disables. Firmware 17.3 drops the connection on bursts
 config_refresh_interval = 300 # 0 disables periodic checks; reconnect still checks
 
 [logging]

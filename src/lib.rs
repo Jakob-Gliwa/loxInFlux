@@ -7,6 +7,7 @@ mod json_repair;
 pub mod logging;
 pub mod metrics;
 pub mod miniserver;
+mod pacer;
 pub mod pipeline;
 pub mod protocol;
 mod stdout;

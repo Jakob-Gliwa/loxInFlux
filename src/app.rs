@@ -3,6 +3,7 @@ use crate::{
     controls::Controls,
     metrics::{self, Metrics},
     miniserver::Loader,
+    pacer::Pacer,
     pipeline::{Batch, Engine, Input},
     writer::Writer,
 };
@@ -339,15 +340,17 @@ async fn poll_loop(
     stop: CancellationToken,
 ) -> Result<()> {
     let secured = Arc::new(Mutex::new(()));
+    let pacer = Pacer::new(config.general.grabber_rate_limit);
     loop {
         if client.live() {
             let current = controls.load_full();
             // ArcSwap pins one immutable snapshot for the cycle. Borrow its
             // controls instead of cloning every UUID string and route prefix.
             let mut remaining = current.grabber.values();
+            let poll = |control| poll_one(&client, control, &tx, &config, &m, &secured, &pacer);
             let mut requests = FuturesUnordered::new();
             for control in remaining.by_ref().take(config.general.grabber_concurrency) {
-                requests.push(poll_one(&client, control, &tx, &config, &m, &secured));
+                requests.push(poll(control));
             }
             let mut failed = false;
             let mut unreadable = 0u64;
@@ -362,7 +365,7 @@ async fn poll_loop(
                             Err(_) => failed = true,
                         }
                         if let Some(control) = remaining.next() {
-                            requests.push(poll_one(&client, control, &tx, &config, &m, &secured));
+                            requests.push(poll(control));
                         }
                     }
                     None => break,
@@ -390,6 +393,7 @@ async fn poll_one(
     config: &Config,
     m: &Metrics,
     secured: &Mutex<()>,
+    pacer: &Pacer,
 ) -> Result<bool> {
     metrics::inc(&m.grabber_requests);
     let result = async {
@@ -402,6 +406,7 @@ async fn poll_one(
                 .context("VisuPwd control requires miniserver.visu_password")?;
             let raw = checked_command(
                 client,
+                pacer,
                 &format!("jdev/sys/getvisusalt/{}", config.miniserver.user),
             )
             .await?;
@@ -411,11 +416,17 @@ async fn poll_one(
             // fire-and-forget visu queue would overwrite concurrent polls.
             checked_command(
                 client,
+                pacer,
                 &format!("jdev/sps/ios/{hash}/{}/all", control.uuid_text),
             )
             .await?
         } else {
-            checked_command(client, &format!("jdev/sps/io/{}/all", control.uuid_text)).await?
+            checked_command(
+                client,
+                pacer,
+                &format!("jdev/sps/io/{}/all", control.uuid_text),
+            )
+            .await?
         };
         let timestamp = metrics::timestamp_ns();
         let received = Instant::now();
@@ -451,7 +462,8 @@ async fn poll_one(
     }
 }
 
-async fn checked_command(client: &Client, command: &str) -> Result<Bytes> {
+async fn checked_command(client: &Client, pacer: &Pacer, command: &str) -> Result<Bytes> {
+    pacer.wait().await;
     // Upstream 0.3.2 resolves a mismatched LL.control to the oldest waiter
     // anyway. Never attach that value to the requested sensor. Its public API
     // exposes only a global mismatch counter, so overlapping requests are

@@ -25,6 +25,8 @@ pub struct General {
     pub rounding_precision: u32,
     pub grabber_interval: u64,
     pub grabber_concurrency: usize,
+    /// Grabber commands per second; 0 disables the limit.
+    pub grabber_rate_limit: u32,
     pub config_refresh_interval: u64,
 }
 impl Default for General {
@@ -35,6 +37,7 @@ impl Default for General {
             rounding_precision: 5,
             grabber_interval: 300,
             grabber_concurrency: 10,
+            grabber_rate_limit: 900,
             config_refresh_interval: 300,
         }
     }
@@ -459,6 +462,14 @@ mod tests {
         assert!(c.filters.type_blacklist.contains("VIRTUALOUTCMD"));
         assert!(!c.processing.only_on_change);
         assert_eq!(c.telegraf.udp_max_bytes, 65507);
+        assert_eq!(c.general.grabber_rate_limit, 900);
+        assert_eq!(
+            Config::parse("[general]\ngrabber_rate_limit=0")
+                .unwrap()
+                .general
+                .grabber_rate_limit,
+            0
+        );
         assert_eq!(
             Config::parse("[telegraf]\nprotocol='TCP'")
                 .unwrap()
