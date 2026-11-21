@@ -336,6 +336,34 @@ Metrics carry no UUID or name labels.
 commits. UDP cannot confirm a receiver; TCP and MQTT QoS 0 cannot confirm storage
 in InfluxDB. Monitor Telegraf and database errors separately.
 
+## Logging
+
+Logs go to stderr. Set the level with `[logging] level`, `LOG_LEVEL` or
+`--log-level`. `RUST_LOG` takes precedence; `RUST_LOG=loxinflux=debug` shows
+loxInFlux's debug output without that of the HTTP libraries.
+
+Each problem is logged with its full cause, its target and, once resolved, how
+long it lasted. Values received over the WebSocket and successful writes are
+never logged individually.
+
+| Event | Level | Message |
+| --- | --- | --- |
+| Output reachable at startup | INFO | `Output connected output=udp://telegraf:8094` |
+| Output write failed, batch retained | WARN | `Output write failed; retaining batch and retrying output=… attempt=… error=…` |
+| Output works again | INFO | `Output recovered failed_attempts=… outage_s=…` |
+| WebSocket closed or lost | WARN | `WebSocket closed by Miniserver; …` or `WebSocket session lost without close frame; …` |
+| WebSocket back | INFO | `WebSocket session restored outage_s=…` |
+| Miniserver configuration loaded | INFO | `Loaded control routes … version=… previous=… trigger=startup\|periodic\|reconnect` |
+| Configuration check failed or recovered | WARN / INFO | `Configuration refresh failed; …` / `Configuration check recovered failed_checks=…` |
+| Polling cycle with errors | WARN | `Grabber cycle incomplete ok=… unreadable=… failed=… first_failures=…` (at most three, with the control's name, room and type) |
+| Polling works again | INFO | `Grabber cycle recovered` |
+| Malformed input | WARN | Once only; further cases count in `loxinflux_parse_errors_total` |
+| loxInFlux stops on an error | ERROR | `loxInFlux stopped error=…`, exit code 1 |
+
+At DEBUG, loxInFlux additionally logs every polling cycle, unchanged
+configuration checks, and the file name, size, version source and parse time of
+each configuration download.
+
 ## Delivery and performance
 
 A single Tokio runtime handles all I/O. Values travel through a bounded in-memory

@@ -1,7 +1,7 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::Parser;
 use loxinflux::config::Config;
-use std::{path::PathBuf, time::Duration};
+use std::{path::PathBuf, process::ExitCode, time::Duration};
 use tokio_util::sync::CancellationToken;
 use tracing_subscriber::EnvFilter;
 
@@ -22,7 +22,7 @@ struct Args {
     healthcheck: bool,
 }
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> Result<()> {
+async fn main() -> Result<ExitCode> {
     let args = Args::parse();
     let path = args
         .config_file
@@ -55,7 +55,7 @@ async fn main() -> Result<()> {
     }
     if args.check_config {
         eprintln!("Configuration valid: {}", path.display());
-        return Ok(());
+        return Ok(ExitCode::SUCCESS);
     }
     if args.healthcheck {
         anyhow::ensure!(config.monitoring.enabled, "Monitoring endpoint is disabled");
@@ -74,7 +74,7 @@ async fn main() -> Result<()> {
             .send()
             .await?
             .error_for_status()?;
-        return Ok(());
+        return Ok(ExitCode::SUCCESS);
     }
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),
@@ -97,9 +97,16 @@ async fn main() -> Result<()> {
         }
         signal.cancel();
     });
-    let result = loxinflux::app::run(config, stop)
-        .await
-        .context("Bridge stopped");
+    let result = loxinflux::app::run(config, stop).await;
     signals.abort();
-    result
+    match result {
+        Ok(()) => {
+            tracing::info!("loxInFlux stopped");
+            Ok(ExitCode::SUCCESS)
+        }
+        Err(error) => {
+            tracing::error!(error = %format_args!("{error:#}"), "loxInFlux stopped");
+            Ok(ExitCode::FAILURE)
+        }
+    }
 }

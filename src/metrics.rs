@@ -65,6 +65,8 @@ pub struct Metrics {
     pub last_written_ns: AtomicU64,
     pub last_grab_success_ns: AtomicU64,
     pub grabber_failed: AtomicBool,
+    /// When the WebSocket session was lost, 0 while connected; not exported.
+    pub websocket_lost_ns: AtomicU64,
 }
 impl Default for Metrics {
     fn default() -> Self {
@@ -101,6 +103,7 @@ impl Default for Metrics {
             last_written_ns: 0.into(),
             last_grab_success_ns: 0.into(),
             grabber_failed: false.into(),
+            websocket_lost_ns: 0.into(),
         }
     }
 }

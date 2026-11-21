@@ -5,7 +5,10 @@ use crate::{
 };
 use anyhow::{Context, Result, bail, ensure};
 use regex::Regex;
-use std::{sync::LazyLock, time::Duration};
+use std::{
+    sync::LazyLock,
+    time::{Duration, Instant},
+};
 
 static CONFIG_FILE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"sps_(\d+)_(\d+)\.(?:zip|LoxCC)").unwrap());
@@ -96,9 +99,18 @@ impl Loader {
     /// Startup path: no WebSocket session exists yet, so the version check
     /// goes over HTTP.
     pub async fn load(&mut self) -> Result<Option<Controls>> {
-        let remote = self.get(VERSION_COMMAND).await;
-        self.load_version(remote.and_then(|data| version_response(&data)).ok())
+        let remote = self
+            .get(VERSION_COMMAND)
             .await
+            .and_then(|data| version_response(&data))
+            .inspect_err(|error| {
+                tracing::debug!(error = %format_args!("{error:#}"), "HTTP version check failed; taking the version from LoxAPP3.json");
+            });
+        self.load_version(remote.ok()).await
+    }
+    /// The configuration version currently loaded, if any.
+    pub fn version(&self) -> Option<&str> {
+        self.version.as_deref()
     }
     /// Downloads and parses the configuration unless `remote`, the
     /// Miniserver's current configuration version, is already loaded. An
@@ -109,21 +121,34 @@ impl Loader {
         if remote.is_some() && remote == self.version {
             return Ok(None);
         }
+        let started = Instant::now();
         let listing = String::from_utf8(self.get("dev/fslist/prog/").await?)?;
         let filename = newest_file(&listing)
             .context("No sps configuration in /prog; check full-access permissions")?;
         let raw = self.get(&format!("dev/fsget/prog/{filename}")).await?;
+        tracing::debug!(
+            file = filename,
+            bytes = raw.len(),
+            "Downloaded configuration file"
+        );
         let (xml, app) = tokio::task::spawn_blocking(move || archive::decode(&raw)).await??;
-        let version = match remote {
-            Some(version) => version,
-            None => app_version(&match app {
-                Some(app) => app,
-                None => self.get("data/LoxAPP3.json").await?,
-            })?,
+        let (version, source) = match (remote, app) {
+            (Some(version), _) => (version, "version check"),
+            (None, Some(app)) => (app_version(&app)?, "LoxAPP3.json in archive"),
+            (None, None) => (
+                app_version(&self.get("data/LoxAPP3.json").await?)?,
+                "LoxAPP3.json download",
+            ),
         };
         let config = self.config.clone();
         let controls =
             tokio::task::spawn_blocking(move || controls::parse(&xml, &config)).await??;
+        tracing::debug!(
+            version,
+            version_source = source,
+            duration_s = %format_args!("{:.2}", started.elapsed().as_secs_f64()),
+            "Parsed configuration"
+        );
         self.version = Some(version);
         Ok(Some(controls))
     }

@@ -8,14 +8,14 @@ use bytes::Bytes;
 use rumqttc::{AsyncClient, Event, Incoming, MqttOptions, Outgoing, QoS};
 use std::{
     sync::{Arc, atomic::Ordering},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::{
     io::AsyncWriteExt,
     net::{TcpStream, UdpSocket},
     sync::watch,
     task::JoinHandle,
-    time::{sleep, timeout},
+    time::{error::Elapsed, sleep, timeout},
 };
 
 enum Transport {
@@ -40,13 +40,48 @@ pub struct Writer {
     config: Telegraf,
     metrics: Arc<Metrics>,
     transport: Option<Transport>,
+    /// Where points go, without credentials; only formatted into logs.
+    output: String,
+    announced: bool,
 }
+
+fn output_name(config: &Telegraf) -> String {
+    let address = |host: &str, port: u16| {
+        if host.contains(':') && !host.starts_with('[') {
+            format!("[{host}]:{port}")
+        } else {
+            format!("{host}:{port}")
+        }
+    };
+    match config.protocol {
+        Protocol::Udp => format!("udp://{}", address(&config.host, config.port)),
+        Protocol::Tcp => format!("tcp://{}", address(&config.host, config.port)),
+        Protocol::Mqtt => format!(
+            "mqtt://{}/{}",
+            address(&config.mqtt.host, config.mqtt.port),
+            config.mqtt.topic
+        ),
+        Protocol::Execd => "execd stdout".into(),
+    }
+}
+
+/// The full error chain, or which deadline expired.
+fn describe(result: &std::result::Result<Result<()>, Elapsed>, limit_secs: u64) -> String {
+    match result {
+        Ok(Ok(())) => "ok".into(),
+        Ok(Err(error)) => format!("{error:#}"),
+        Err(_) => format!("timed out after {limit_secs} s"),
+    }
+}
+
 impl Writer {
     pub fn new(config: Telegraf, metrics: Arc<Metrics>) -> Self {
         Self {
+            output: output_name(&config),
             config,
             metrics,
             transport: None,
+            announced: false,
         }
     }
     async fn connect(&mut self) -> Result<()> {
@@ -93,12 +128,22 @@ impl Writer {
                 }
                 let metrics = self.metrics.clone();
                 let max = self.config.max_retries;
+                let output = self.output.clone();
                 let (flushed_tx, flushed) = watch::channel(0u64);
                 let task = tokio::spawn(async move {
                     let mut failures = 0u32;
+                    let mut first_failure = None::<Instant>;
                     loop {
                         match eventloop.poll().await {
                             Ok(Event::Incoming(Incoming::ConnAck(_))) => {
+                                if let Some(first) = first_failure.take() {
+                                    tracing::info!(
+                                        output = %output,
+                                        failed_attempts = failures,
+                                        outage_s = %format_args!("{:.1}", first.elapsed().as_secs_f64()),
+                                        "MQTT connection restored"
+                                    );
+                                }
                                 failures = 0;
                                 metrics.output_ready.store(true, Ordering::Relaxed);
                             }
@@ -113,11 +158,16 @@ impl Writer {
                                 metrics.output_ready.store(false, Ordering::Relaxed);
                                 metrics::inc(&metrics.write_errors);
                                 failures = failures.saturating_add(1);
+                                first_failure.get_or_insert_with(Instant::now);
                                 if max > 0 && failures >= max as u32 {
-                                    return Err(error.into());
+                                    return Err(anyhow::Error::from(error).context(format!(
+                                        "MQTT connection to {output} failed after {failures} attempts"
+                                    )));
                                 }
                                 tracing::warn!(
+                                    output = %output,
                                     attempt = failures,
+                                    error = %error,
                                     "MQTT connection failed; retrying"
                                 );
                                 sleep(Duration::from_secs(1u64 << failures.min(5))).await;
@@ -144,19 +194,36 @@ impl Writer {
                 self.connect(),
             )
             .await;
-            match result {
-                Ok(Ok(())) => return Ok(()),
-                other => {
-                    self.metrics.output_ready.store(false, Ordering::Relaxed);
-                    metrics::inc(&self.metrics.write_errors);
-                    failures += 1;
-                    if self.config.max_retries > 0 && failures >= self.config.max_retries {
-                        bail!("Output connection failed after {failures} attempts: {other:?}");
-                    }
-                    tracing::warn!(attempt = failures, "Output connection failed; retrying");
-                    sleep(Duration::from_secs(1)).await;
+            if matches!(result, Ok(Ok(()))) {
+                // Reconnects after a failed write are reported once the batch
+                // is delivered, see write_data.
+                if !self.announced {
+                    self.announced = true;
+                    tracing::info!(
+                        output = %self.output,
+                        failed_attempts = failures,
+                        "Output connected"
+                    );
                 }
+                return Ok(());
             }
+            self.metrics.output_ready.store(false, Ordering::Relaxed);
+            metrics::inc(&self.metrics.write_errors);
+            failures += 1;
+            let error = describe(&result, self.config.write_timeout);
+            if self.config.max_retries > 0 && failures >= self.config.max_retries {
+                bail!(
+                    "Output connection to {} failed after {failures} attempts: {error}",
+                    self.output
+                );
+            }
+            tracing::warn!(
+                output = %self.output,
+                attempt = failures,
+                error = %error,
+                "Output connection failed; retrying"
+            );
+            sleep(Duration::from_secs(1)).await;
         }
     }
     pub async fn write(&mut self, batch: &mut Batch) -> Result<()> {
@@ -197,6 +264,7 @@ impl Writer {
             );
         }
         let mut failures = 0;
+        let mut first_failure = None::<Instant>;
         loop {
             if self.transport.is_none() {
                 self.initialize().await?;
@@ -219,6 +287,14 @@ impl Writer {
                     self.metrics
                         .last_written_ns
                         .store(metrics::timestamp_ns(), Ordering::Relaxed);
+                    if let Some(first) = first_failure {
+                        tracing::info!(
+                            output = %self.output,
+                            failed_attempts = failures,
+                            outage_s = %format_args!("{:.1}", first.elapsed().as_secs_f64()),
+                            "Output recovered"
+                        );
+                    }
                     return Ok(());
                 }
                 other => {
@@ -228,11 +304,18 @@ impl Writer {
                     // TCP disconnect may have delivered a prefix already.
                     self.transport = None;
                     failures += 1;
+                    first_failure.get_or_insert_with(Instant::now);
+                    let error = describe(&other, self.config.write_timeout);
                     if self.config.max_retries > 0 && failures >= self.config.max_retries {
-                        bail!("Output write failed after {failures} attempts: {other:?}");
+                        bail!(
+                            "Output write to {} failed after {failures} attempts: {error}",
+                            self.output
+                        );
                     }
                     tracing::warn!(
+                        output = %self.output,
                         attempt = failures,
+                        error = %error,
                         "Output write failed; retaining batch and retrying"
                     );
                     sleep(Duration::from_secs(1)).await;
@@ -340,6 +423,38 @@ mod tests {
         let mut body = vec![0; size];
         socket.read_exact(&mut body).await.unwrap();
         (kind, body)
+    }
+    #[test]
+    fn output_names_identify_the_target_without_credentials() {
+        let mut cfg = Telegraf {
+            host: "telegraf".into(),
+            port: 8094,
+            ..Default::default()
+        };
+        assert_eq!(output_name(&cfg), "udp://telegraf:8094");
+        cfg.protocol = Protocol::Tcp;
+        cfg.host = "fd00::1".into();
+        assert_eq!(output_name(&cfg), "tcp://[fd00::1]:8094");
+        cfg.protocol = Protocol::Mqtt;
+        cfg.mqtt.host = "broker".into();
+        cfg.mqtt.username = Some("user".into());
+        cfg.mqtt.password = Some("secret".into());
+        let name = output_name(&cfg);
+        assert_eq!(name, format!("mqtt://broker:1883/{}", cfg.mqtt.topic));
+        assert!(!name.contains("user") && !name.contains("secret"));
+        cfg.protocol = Protocol::Execd;
+        assert_eq!(output_name(&cfg), "execd stdout");
+    }
+    #[tokio::test]
+    async fn describe_shows_the_error_chain_or_the_deadline() {
+        let refused = Err(anyhow::anyhow!("Connection refused").context("Write to telegraf:8094"));
+        assert_eq!(
+            describe(&Ok(refused), 5),
+            "Write to telegraf:8094: Connection refused"
+        );
+        assert_eq!(describe(&Ok(Ok(())), 5), "ok");
+        let elapsed = timeout(Duration::ZERO, std::future::pending::<Result<()>>()).await;
+        assert_eq!(describe(&elapsed, 5), "timed out after 5 s");
     }
     #[tokio::test]
     async fn mqtt_flushes_large_batch_before_reporting_written_and_disconnects() {
