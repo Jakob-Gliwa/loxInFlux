@@ -5,13 +5,7 @@ use crate::{
 };
 use anyhow::{Context, Result, bail, ensure};
 use regex::Regex;
-use serde::{Deserialize, Serialize};
-use std::{
-    io::{BufWriter, Write},
-    path::PathBuf,
-    sync::LazyLock,
-    time::Duration,
-};
+use std::{sync::LazyLock, time::Duration};
 
 static CONFIG_FILE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"sps_(\d+)_(\d+)\.(?:zip|LoxCC)").unwrap());
@@ -29,13 +23,6 @@ pub fn newest_file(listing: &str) -> Option<&str> {
         })
         .max_by_key(|(_, key)| *key)
         .map(|(name, _)| name)
-}
-#[derive(Serialize, Deserialize)]
-struct Cache {
-    origin: String,
-    username: String,
-    xml: String,
-    app: serde_json::Value,
 }
 pub struct Loader {
     client: reqwest::Client,
@@ -94,31 +81,12 @@ impl Loader {
             .map(str::to_owned)
             .context("Missing configuration version")
     }
-    fn cache_path(&self) -> PathBuf {
-        PathBuf::from(&self.config.paths.data_dir).join("configuration-cache.json")
-    }
+    /// The configuration is kept in memory only: it contains the complete
+    /// Miniserver program, including users and credentials.
     pub async fn load(&mut self) -> Result<Option<Controls>> {
         let remote = self.remote_version().await.ok();
         if remote.is_some() && remote == self.version {
             return Ok(None);
-        }
-        if self.version.is_none()
-            && let Some(version) = &remote
-            && let Ok(bytes) = tokio::fs::read(self.cache_path()).await
-            && let Ok(cache) = serde_json::from_slice::<Cache>(&bytes)
-            && cache.origin == self.config.miniserver.base_url()
-            && cache.username == self.config.miniserver.user
-            && cache.app["lastModified"].as_str() == Some(version.as_str())
-        {
-            match controls::parse(cache.xml.as_bytes(), &self.config) {
-                Ok(controls) => {
-                    self.version = remote;
-                    return Ok(Some(controls));
-                }
-                Err(error) => {
-                    tracing::warn!(%error, "Ignoring invalid configuration cache; downloading again")
-                }
-            }
         }
         let listing = String::from_utf8(self.get("dev/fslist/prog/").await?)?;
         let filename = newest_file(&listing)
@@ -134,37 +102,8 @@ impl Loader {
             .context("LoxAPP3.json lacks lastModified; check access rights")?
             .to_owned();
         let config = self.config.clone();
-        let (controls, xml) = tokio::task::spawn_blocking(move || -> Result<_> {
-            // Preserve the parser's lossy UTF-8 recovery through persistence.
-            // Otherwise a stray byte accepted by the scanner still aborts startup.
-            let xml = String::from_utf8(xml)
-                .unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned());
-            let controls = controls::parse(xml.as_bytes(), &config)?;
-            Ok((controls, xml))
-        })
-        .await??;
-        let cache = Cache {
-            origin: self.config.miniserver.base_url(),
-            username: self.config.miniserver.user.clone(),
-            xml,
-            app,
-        };
-        tokio::fs::create_dir_all(&self.config.paths.data_dir).await?;
-        // A single atomic snapshot prevents pairing an old XML with a new JSON
-        // if the process exits during persistence.
-        let path = self.cache_path();
-        let temp = path.with_extension("json.tmp");
-        // Stream on the blocking pool: avoid a second complete escaped XML/JSON
-        // buffer and do not stall the WebSocket reader during a config refresh.
-        tokio::task::spawn_blocking(move || -> Result<()> {
-            let mut out = BufWriter::with_capacity(64 * 1024, std::fs::File::create(&temp)?);
-            serde_json::to_writer(&mut out, &cache)?;
-            out.flush()?;
-            drop(out);
-            std::fs::rename(temp, path)?;
-            Ok(())
-        })
-        .await??;
+        let controls =
+            tokio::task::spawn_blocking(move || controls::parse(&xml, &config)).await??;
         self.version = Some(version);
         Ok(Some(controls))
     }

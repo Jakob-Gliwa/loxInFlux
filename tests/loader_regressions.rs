@@ -59,59 +59,35 @@ fn routes_with_xml(xml: &[u8]) -> HashMap<String, Reply> {
 }
 
 #[tokio::test]
-async fn malformed_utf8_xml_survives_loading_persistence_and_cache_reuse() {
+async fn malformed_utf8_xml_survives_loading() {
     let mut xml = XML.as_bytes().to_vec();
     let at = xml.windows(4).position(|s| s == b"Test").unwrap();
     xml[at] = 0xe6; // Stray UTF-8 byte, as reported in loxMqttRelay issue #4.
     let server = serve(routes_with_xml(&xml)).await;
-    let dir = tempfile::tempdir().unwrap();
-    let cfg = config(&server, &dir);
-    let first = Loader::new(&cfg).unwrap().load().await.unwrap().unwrap();
-    let cached = Loader::new(&cfg).unwrap().load().await.unwrap().unwrap();
-    assert_eq!(first.grabber.len(), 1);
-    for (id, route) in first.websocket {
+    let controls = Loader::new(&config(&server))
+        .unwrap()
+        .load()
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(controls.grabber.len(), 1);
+    for route in controls.websocket.values() {
         assert!(route.prefix.starts_with("\u{fffd}est,"));
-        assert_eq!(route.prefix, cached.websocket[&id].prefix);
     }
-    assert_eq!(
-        server
-            .requests
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|(path, _)| path == LIST)
-            .count(),
-        1
-    );
 }
 type Requests = Arc<Mutex<Vec<(String, Option<String>)>>>;
 #[tokio::test]
-async fn corrupt_xml_in_a_version_matching_cache_is_downloaded_again() {
+async fn every_start_downloads_the_configuration_again() {
     let server = serve(routes()).await;
-    let dir = tempfile::tempdir().unwrap();
-    let cfg = config(&server, &dir);
-    let expected = Loader::new(&cfg).unwrap().load().await.unwrap().unwrap();
-    let path = std::path::Path::new(&cfg.paths.data_dir).join("configuration-cache.json");
-    let mut cache: serde_json::Value =
-        serde_json::from_slice(&tokio::fs::read(&path).await.unwrap()).unwrap();
-    cache["xml"] = "not an XML document".into();
-    tokio::fs::write(&path, serde_json::to_vec(&cache).unwrap())
-        .await
-        .unwrap();
-    let recovered = Loader::new(&cfg).unwrap().load().await.unwrap().unwrap();
-    assert_eq!(recovered.websocket.len(), expected.websocket.len());
-    assert_eq!(
-        server
-            .requests
-            .lock()
+    for _ in 0..2 {
+        let controls = Loader::new(&config(&server))
             .unwrap()
-            .iter()
-            .filter(|(path, _)| path == LIST)
-            .count(),
-        2
-    );
-    let cached = Loader::new(&cfg).unwrap().load().await.unwrap().unwrap();
-    assert_eq!(cached.grabber.len(), expected.grabber.len());
+            .load()
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(controls.grabber.len(), 1);
+    }
     assert_eq!(
         server
             .requests
@@ -172,22 +148,17 @@ async fn serve(routes: HashMap<String, Reply>) -> Server {
         task,
     }
 }
-fn config(server: &Server, dir: &tempfile::TempDir) -> Config {
+fn config(server: &Server) -> Config {
     let mut config = Config::default();
     config.miniserver.host = "127.0.0.1".into();
     config.miniserver.port = server.port;
     config.miniserver.user = "test".into();
     config.miniserver.password = "secret".into();
-    config.paths.data_dir = dir
-        .path()
-        .join("not-yet-created/data")
-        .to_string_lossy()
-        .into_owned();
     config
 }
 
 #[tokio::test]
-async fn redirects_preserve_same_origin_auth_and_load_firmware17_then_reuse_cache() {
+async fn redirects_preserve_same_origin_auth_and_load_firmware17_once_per_version() {
     let mut files = routes();
     for path in [VERSION, LIST, FILE, APP] {
         let body = files.remove(path).unwrap();
@@ -195,17 +166,10 @@ async fn redirects_preserve_same_origin_auth_and_load_firmware17_then_reuse_cach
         files.insert(format!("/redirect{path}"), body);
     }
     let server = serve(files).await;
-    let dir = tempfile::tempdir().unwrap();
-    let cfg = config(&server, &dir);
-    let mut loader = Loader::new(&cfg).unwrap();
+    let mut loader = Loader::new(&config(&server)).unwrap();
     let controls = loader.load().await.unwrap().unwrap();
     assert_eq!(controls.grabber.len(), 1);
     assert!(loader.load().await.unwrap().is_none());
-    assert!(
-        std::path::Path::new(&cfg.paths.data_dir)
-            .join("configuration-cache.json")
-            .exists()
-    );
     let requests = server.requests.lock().unwrap();
     assert_eq!(requests.iter().filter(|(path, _)| path == LIST).count(), 1);
     assert!(
@@ -226,8 +190,7 @@ async fn filesystem_and_app_http200_ll_errors_report_status_and_endpoint() {
             let mut files = routes();
             files.insert(endpoint.into(), Reply::Body(body.to_vec()));
             let server = serve(files).await;
-            let dir = tempfile::tempdir().unwrap();
-            let mut loader = Loader::new(&config(&server, &dir)).unwrap();
+            let mut loader = Loader::new(&config(&server)).unwrap();
             let error = format!("{:#}", loader.load().await.unwrap_err());
             assert!(
                 error.contains("403"),
@@ -244,10 +207,9 @@ async fn redirect_loop_stops_with_http_error_instead_of_parsing_empty_config() {
     let mut files = routes();
     files.insert(LIST.into(), Reply::Redirect(LIST.into()));
     let server = serve(files).await;
-    let dir = tempfile::tempdir().unwrap();
     let error = format!(
         "{:#}",
-        Loader::new(&config(&server, &dir))
+        Loader::new(&config(&server))
             .unwrap()
             .load()
             .await
@@ -266,12 +228,7 @@ async fn redirects_to_another_origin_do_not_forward_credentials() {
         Reply::Redirect(format!("http://127.0.0.1:{}{LIST}", destination.port)),
     );
     let source = serve(files).await;
-    let dir = tempfile::tempdir().unwrap();
-    Loader::new(&config(&source, &dir))
-        .unwrap()
-        .load()
-        .await
-        .unwrap();
+    Loader::new(&config(&source)).unwrap().load().await.unwrap();
     let requests = destination.requests.lock().unwrap();
     assert_eq!(requests.len(), 1);
     assert!(requests[0].1.is_none());

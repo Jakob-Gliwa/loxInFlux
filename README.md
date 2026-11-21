@@ -65,12 +65,18 @@ to migrate, pin `acidcliff/loxinflux:0.3` (or `:0.3.0`) in your compose file.
    (about 4 MB compressed instead of 59 MB). There is no shell in the container,
    so `docker exec … sh` no longer works; logs still go to `docker logs`. The old
    `docker-entrypoint.sh` no longer exists. `loxInFlux` stays available as an
-   alias, and `CONFIG_DIR`, `DATA_DIR`, `LOG_LEVEL`, `--config-dir`, `--data-dir`
-   and `--log-level` work as before. The cache in `/app/data` has a new format
-   and is downloaded once on the first start; the old files are left untouched.
-5. **New health and metrics endpoint on port 9108** with a Docker healthcheck,
+   alias, and `CONFIG_DIR`, `LOG_LEVEL`, `--config-dir` and `--log-level` work
+   as before.
+5. **Nothing is stored on disk any more.** The Miniserver configuration contains
+   the complete program, including users and credentials. 0.5 keeps it in memory
+   only and downloads it again on every start, so the `/app/data` mount is no
+   longer needed. `[paths]`, `--data-dir` and `DATA_DIR` are ignored with a
+   warning. 0.3 left `sps_*.xml` and `LoxAPP3.json` there and never deleted old
+   versions; delete those files (and a `configuration-cache.json` from 0.5
+   experimental builds) once you no longer need to roll back.
+6. **New health and metrics endpoint on port 9108** with a Docker healthcheck,
    see [Health and metrics](#health-and-metrics).
-6. **Deprecated keys warn.** `telegraf.round_floats` and `telegraf.round_decimals`
+7. **Deprecated keys warn.** `telegraf.round_floats` and `telegraf.round_decimals`
    never had an effect; they now log a deprecation warning. Rounding is
    configured with `general.round_floats` and `general.rounding_precision`.
 
@@ -83,7 +89,7 @@ including a pilot run and rollback, is in [docs/migration.md](docs/migration.md#
 
 ```sh
 # 1. Get the configuration template
-mkdir -p config data
+mkdir -p config
 curl -o config/config.toml https://raw.githubusercontent.com/Jakob-Gliwa/loxInFlux/main/config/default_config.toml
 
 # 2. Edit config/config.toml (Miniserver and Telegraf addresses and credentials)
@@ -94,7 +100,6 @@ docker run -d \
   --name loxinflux \
   -e TZ="<your timezone>" \
   -v "$PWD/config:/app/config:ro" \
-  -v "$PWD/data:/app/data" \
   -p 9108:9108 \
   --restart unless-stopped \
   acidcliff/loxinflux:latest
@@ -351,7 +356,7 @@ Requires Rust 1.99 or newer.
 ```sh
 cargo build --release --locked
 target/release/loxinflux --config-dir config --check-config
-target/release/loxinflux --config-dir config --data-dir data
+target/release/loxinflux --config-dir config
 ```
 
 Docker:

@@ -86,7 +86,3 @@ harness = false
 [[bench]]
 name = "bridge"
 harness = false
-
-[[bench]]
-name = "cache"
-harness = false

@@ -8,4 +8,3 @@ services:
       - "9108:9108"
     volumes:
       - ./config:/app/config:ro
-      - ./data:/app/data

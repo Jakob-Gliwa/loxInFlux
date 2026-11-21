@@ -16,8 +16,8 @@ breaking changes is in the [README](../README.md#breaking-changes-in-050).
    the configuration that writes to a fresh bucket or a separate Telegraf
    output. Compare numeric values, UUID and field counts and field types. Check
    AQ decimals, `__text__*` fields, `/health`, queue depth, dropped values and
-   Telegraf write errors. Both versions can poll the same Miniserver; they need
-   separate data directories.
+   Telegraf write errors. Both versions can poll the same Miniserver; the 0.5
+   pilot needs no data directory.
 4. **Decide what happens to the history.** Every numeric field is a float from
    0.5 on. Fields that 0.3 stored as integers or strings in the same bucket
    reject the new points with `field type conflict`. Either
@@ -27,16 +27,23 @@ breaking changes is in the [README](../README.md#breaking-changes-in-050).
      from [PR #6](https://github.com/Jakob-Gliwa/loxInFlux/pull/6) reads,
      coerces, deletes and rewrites one month at a time, and defaults to a dry
      run. Take a backup and stop loxInFlux while it runs.
-5. **Switch production** to `:0.5`, keep the same `/app/config` and `/app/data`
-   mounts, and optionally map port 9108 for health and metrics.
+5. **Switch production** to `:0.5`, keep the `/app/config` mount, drop the
+   `/app/data` mount and the `[paths]` section, and optionally map port 9108 for
+   health and metrics.
 6. **Optionally enable change-only writes** (`processing.only_on_change = true`
    with `heartbeat_interval = 3600`). Adapt graph fill and rate windows to the
    sparser data.
+7. **Delete the old configuration copies.** 0.3 wrote one `sps_*.xml` per
+   Miniserver program version plus `LoxAPP3.json` into the data directory and
+   never removed them; 0.5 experimental builds wrote `configuration-cache.json`.
+   They contain the complete Miniserver program, including users and
+   credentials. 0.5 neither reads nor deletes them. Remove them once a rollback
+   is no longer planned; 0.3 downloads its configuration again if they are gone.
 
-**Rollback:** go back to `acidcliff/loxinflux:0.3.0`. The 0.3 cache files in
-`/app/data` are untouched by 0.5. Float points that 0.5 already wrote stay in
-the bucket and will in turn conflict with 0.3's integer writes, which is another
-reason to pilot against a separate bucket.
+**Rollback:** go back to `acidcliff/loxinflux:0.3.0` and restore the `/app/data`
+mount. Float points that 0.5 already wrote stay in the bucket and will in turn
+conflict with 0.3's integer writes, which is another reason to pilot against a
+separate bucket.
 
 ## Source audit
 
@@ -68,7 +75,7 @@ must not be mistaken for changes already present in the old release.
 | XML duplicate attributes/BOM/recovery | Streaming parser, first duplicate wins, recover parsed prefix |
 | ZIP and bare LoxCC | Magic-based detection, LZ4 block/frame, CRC and size validation |
 | LoxAPP3 JSON | ZIP member or separate `/data/LoxAPP3.json` download |
-| Config cache and reconnect refresh | Atomic combined XML/JSON cache; version check plus periodic refresh |
+| Config cache and reconnect refresh | No disk cache; in-memory version check plus periodic refresh |
 | UDP/TCP/MQTT/execd | All supported; batching, framed writes and bounded retries |
 | Rounding | Same setting; optional decimal rounding, never integer truncation |
 | Graceful shutdown | Stop producers, close WebSocket, drain output with deadline |
@@ -76,11 +83,10 @@ must not be mistaken for changes already present in the old release.
 | Execd log severities | Legacy stderr prefixes retained; stdout reserved for metrics |
 | Health and metrics | HTTP readiness/liveness and Prometheus, no separate sidecar |
 
-The cache format is new and is downloaded once on migration; existing Python cache
-files remain untouched. New caches bind to Miniserver address and user. JSON/XML
-are written in one atomic file to prevent torn pairs after a crash. TOML connection
-passwords are not added to that cache. Token authentication/refresh/reconnect remain owned
-by the WebSocket client; credentials come from the existing TOML configuration.
+The Miniserver configuration is held in memory only and downloaded on every
+start; existing Python cache files remain untouched. Token
+authentication/refresh/reconnect remain owned by the WebSocket client;
+credentials come from the existing TOML configuration.
 
 The Rust scanner tolerates the malformed XML cases in the existing fixtures
 (duplicate attributes, BOM, missing closing tags). It is not a reimplementation

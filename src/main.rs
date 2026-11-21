@@ -12,7 +12,7 @@ struct Args {
     config_dir: PathBuf,
     #[arg(long)]
     config_file: Option<PathBuf>,
-    #[arg(long, env = "DATA_DIR")]
+    #[arg(long, env = "DATA_DIR", hide = true)]
     data_dir: Option<PathBuf>,
     #[arg(long, env = "LOG_LEVEL")]
     log_level: Option<String>,
@@ -27,10 +27,7 @@ async fn main() -> Result<()> {
     let path = args
         .config_file
         .unwrap_or_else(|| args.config_dir.join("config.toml"));
-    let mut config = Config::load(&path)?;
-    if let Some(path) = args.data_dir {
-        config.paths.data_dir = path.to_string_lossy().into_owned();
-    }
+    let config = Config::load(&path)?;
     let level = args
         .log_level
         .unwrap_or_else(|| config.logging.level.clone())
@@ -50,6 +47,11 @@ async fn main() -> Result<()> {
         .init();
     for key in &config.deprecated_keys {
         tracing::warn!(key = ?key, "Deprecated configuration entry is ignored and has no effect; accepting this entry will no longer be supported in a future version. Remove it from the configuration");
+    }
+    if args.data_dir.is_some() {
+        tracing::warn!(
+            "--data-dir / DATA_DIR is ignored: the Miniserver configuration is no longer stored on disk. Files left in that directory by earlier versions can be deleted"
+        );
     }
     if args.check_config {
         eprintln!("Configuration valid: {}", path.display());

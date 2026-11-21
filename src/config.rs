@@ -10,7 +10,6 @@ pub struct Config {
     pub general: General,
     pub logging: Logging,
     pub miniserver: Miniserver,
-    pub paths: Paths,
     pub telegraf: Telegraf,
     pub filters: Filters,
     pub processing: Processing,
@@ -96,19 +95,6 @@ impl Miniserver {
         }
     }
 }
-#[derive(Clone, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct Paths {
-    pub data_dir: String,
-}
-impl Default for Paths {
-    fn default() -> Self {
-        Self {
-            data_dir: "data".into(),
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(try_from = "String")]
 pub enum Protocol {
@@ -296,7 +282,6 @@ impl Config {
                     "general",
                     "logging",
                     "miniserver",
-                    "paths",
                     "telegraf",
                     "filters",
                     "processing",
@@ -463,6 +448,7 @@ mod tests {
         assert!(!c.processing.only_on_change);
         assert_eq!(c.telegraf.udp_max_bytes, 65507);
         assert_eq!(c.general.grabber_rate_limit, 900);
+        assert_eq!(c.deprecated_keys, ["paths"]);
         assert_eq!(
             Config::parse("[general]\ngrabber_rate_limit=0")
                 .unwrap()

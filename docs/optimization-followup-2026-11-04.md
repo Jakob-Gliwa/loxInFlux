@@ -38,6 +38,8 @@ original Rust port. Dependencies and Cargo.lock are unchanged.
    blocking pool. This avoids constructing a second complete escaped cache
    document and avoids doing its serialization on the WebSocket runtime thread.
    Flush and close precede the atomic rename. The JSON cache format is unchanged.
+   *Removed in 0.5.0:* the Miniserver configuration is no longer written to
+   disk, so the cache and its benchmark no longer exist.
 
 The two BTreeMaps and owned returned field names in the grabber parser remain.
 This pass reduces allocations; it does not claim an entirely zero-copy parser
@@ -163,8 +165,6 @@ The existing benchmark commands remain valid. Additional checks:
 
 ```sh
 cargo bench --locked --bench bridge
-LOX_XML_BENCH=/path/to/export.xml cargo bench --locked --bench cache
 ```
 
-The bridge benchmark requires local loopback sockets. The cache benchmark writes
-only inside its own temporary directory and does not modify the supplied export.
+The bridge benchmark requires local loopback sockets.

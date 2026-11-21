@@ -18,9 +18,6 @@ password = "password"
 visu_password = "visupassword" # Optional: Set if you have visualization password secured controls 
 max_reconnect_attempts = 0 # Optional (Default: 0): number of retries to establish connection to miniserver if connection is lost. Not set / set to 0 will result in unlimited retries - Default 0
 
-[paths]
-data_dir = "data" # Directory for storing cached Loxone configurations - Default data
-
 [telegraf]
 host = "192.168.1.101" # IP address telegraf instance, e.g. 192.168.0.100 - no prefix or port
 port = 8086

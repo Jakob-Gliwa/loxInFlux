@@ -54,7 +54,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     rustup target add "${TARGET}"; \
     RUSTFLAGS="-C target-feature=+crt-static -C target-cpu=generic" \
       cargo build --release --locked --target "${TARGET}" --bin loxinflux; \
-    mkdir -p /out/bin /out/app/config /out/app/data; \
+    mkdir -p /out/bin /out/app/config; \
     cp "target/${TARGET}/release/loxinflux" /out/bin/loxinflux; \
     ln -s loxinflux /out/bin/loxInFlux; \
     if ldd /out/bin/loxinflux 2>&1 | grep -q "=>"; then \
@@ -68,10 +68,9 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 # -------------------------------------
 FROM scratch
 
-# The binary resolves its directories from these, so the documented
-# `-v ./config:/app/config` and `-v ./data:/app/data` mounts are what it reads.
+# The binary resolves its config directory from this, so the documented
+# `-v ./config:/app/config` mount is what it reads. Nothing is written to disk.
 ENV CONFIG_DIR=/app/config \
-    DATA_DIR=/app/data \
     LOG_LEVEL=INFO
 
 WORKDIR /app
@@ -83,7 +82,7 @@ COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /out/bin/ /usr/local/bin/
 COPY --from=builder /out/app/ /app/
 
-VOLUME ["/app/config", "/app/data"]
+VOLUME ["/app/config"]
 EXPOSE 9108/tcp
 
 # Docker's default, stated so the contract is visible: SIGTERM stops the

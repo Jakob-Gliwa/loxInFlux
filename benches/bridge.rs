@@ -82,13 +82,11 @@ async fn run(dedup: bool) {
             count_tx.send_modify(|n| *n += points);
         }
     });
-    let dir = tempfile::tempdir().unwrap();
     let mut cfg = Config::default();
     cfg.miniserver.host = "127.0.0.1".into();
     cfg.miniserver.port = fake.port();
     cfg.miniserver.user = TEST_USER.into();
     cfg.miniserver.password = TEST_PASSWORD.into();
-    cfg.paths.data_dir = dir.path().to_string_lossy().into_owned();
     cfg.general.grabber = false;
     cfg.general.config_refresh_interval = 0;
     cfg.monitoring.enabled = false;

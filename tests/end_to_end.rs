@@ -28,13 +28,10 @@ fn loxcc(xml: &[u8]) -> Vec<u8> {
     out.extend(body);
     out
 }
-async fn setup(secured: bool) -> (FakeMiniserver, Config, tempfile::TempDir, UdpSocket, u16) {
+async fn setup(secured: bool) -> (FakeMiniserver, Config, UdpSocket, u16) {
     setup_extra(secured, false).await
 }
-async fn setup_extra(
-    secured: bool,
-    extra: bool,
-) -> (FakeMiniserver, Config, tempfile::TempDir, UdpSocket, u16) {
+async fn setup_extra(secured: bool, extra: bool) -> (FakeMiniserver, Config, UdpSocket, u16) {
     let id = common::uuid(0xa1);
     let poll = common::uuid(0xa3);
     let mut xml = format!(
@@ -75,7 +72,6 @@ async fn setup_extra(
     let reservation = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = reservation.local_addr().unwrap().port();
     drop(reservation);
-    let dir = tempfile::tempdir().unwrap();
     let mut config = Config::default();
     config.miniserver.host = "127.0.0.1".into();
     config.miniserver.port = fake.port();
@@ -83,7 +79,6 @@ async fn setup_extra(
     config.miniserver.password = TEST_PASSWORD.into();
     config.miniserver.visu_password = Some(TEST_VISU_PASSWORD.into());
     config.miniserver.max_reconnect_attempts = 1;
-    config.paths.data_dir = dir.path().to_string_lossy().into_owned();
     config.telegraf.host = "127.0.0.1".into();
     config.telegraf.port = output.local_addr().unwrap().port();
     config.telegraf.protocol = Protocol::Udp;
@@ -91,7 +86,7 @@ async fn setup_extra(
     config.general.config_refresh_interval = 1;
     config.monitoring.listen = format!("127.0.0.1:{port}");
     config.processing.only_on_change = true;
-    (fake, config, dir, output, port)
+    (fake, config, output, port)
 }
 async fn receive_until(socket: &UdpSocket, needle: &str) -> String {
     timeout(Duration::from_secs(20), async {
@@ -110,8 +105,8 @@ async fn receive_until(socket: &UdpSocket, needle: &str) -> String {
 }
 
 #[tokio::test]
-async fn encrypted_websocket_polling_health_cache_and_shutdown_work_together() {
-    let (fake, config, dir, output, port) = setup(false).await;
+async fn encrypted_websocket_polling_health_and_shutdown_work_together() {
+    let (fake, config, output, port) = setup(false).await;
     let stop = CancellationToken::new();
     let task = tokio::spawn(app::run(config, stop.clone()));
     let first = receive_until(&output, "Default=9.4").await;
@@ -142,7 +137,6 @@ async fn encrypted_websocket_polling_health_cache_and_shutdown_work_together() {
         .await
         .unwrap();
     assert!(metrics.contains("loxinflux_values_dropped_total 0"));
-    assert!(dir.path().join("configuration-cache.json").exists());
     stop.cancel();
     timeout(Duration::from_secs(10), task)
         .await
@@ -158,7 +152,7 @@ async fn encrypted_websocket_polling_health_cache_and_shutdown_work_together() {
 }
 #[tokio::test]
 async fn visu_password_secured_polling_awaits_the_actual_answer() {
-    let (_fake, config, _dir, output, _) = setup(true).await;
+    let (_fake, config, output, _) = setup(true).await;
     let stop = CancellationToken::new();
     let task = tokio::spawn(app::run(config, stop.clone()));
     let actual = receive_until(&output, "Default=9.4").await;
@@ -174,7 +168,7 @@ async fn visu_password_secured_polling_awaits_the_actual_answer() {
 #[tokio::test]
 async fn reconnect_resets_dedup_and_delivers_same_initial_value_again() {
     common::init_tracing();
-    let (fake, config, _dir, output, port) = setup(false).await;
+    let (fake, config, output, port) = setup(false).await;
     let stop = CancellationToken::new();
     let task = tokio::spawn(app::run(config, stop.clone()));
     // The initial table intentionally precedes the authentication completion;
@@ -211,8 +205,8 @@ async fn reconnect_resets_dedup_and_delivers_same_initial_value_again() {
 }
 
 #[tokio::test]
-async fn restart_reuses_version_checked_atomic_configuration_cache() {
-    let (fake, config, _dir, output, _) = setup(false).await;
+async fn restart_downloads_the_configuration_again() {
+    let (fake, config, output, _) = setup(false).await;
     for _ in 0..2 {
         let stop = CancellationToken::new();
         let task = tokio::spawn(app::run(config.clone(), stop.clone()));
@@ -230,13 +224,13 @@ async fn restart_reuses_version_checked_atomic_configuration_cache() {
             .iter()
             .filter(|p| p.as_str() == "dev/fslist/prog/")
             .count(),
-        1
+        2
     );
 }
 
 #[tokio::test]
 async fn failed_poll_stops_its_heartbeat_while_websocket_values_remain_live() {
-    let (fake, mut config, _dir, output, port) = setup(false).await;
+    let (fake, mut config, output, port) = setup(false).await;
     config.processing.heartbeat_interval = 1;
     let stop = CancellationToken::new();
     let task = tokio::spawn(app::run(config, stop.clone()));
@@ -293,7 +287,7 @@ async fn failed_poll_stops_its_heartbeat_while_websocket_values_remain_live() {
 #[tokio::test]
 async fn mismatched_poll_response_never_becomes_another_controls_measurement() {
     for secured in [false, true] {
-        let (fake, config, _dir, output, port) = setup(secured).await;
+        let (fake, config, output, port) = setup(secured).await;
         fake.state.set_poll_mismatch(true);
         let stop = CancellationToken::new();
         let task = tokio::spawn(app::run(config, stop.clone()));
@@ -329,7 +323,7 @@ async fn mismatched_poll_response_never_becomes_another_controls_measurement() {
 
 #[tokio::test]
 async fn cancelling_startup_still_releases_the_authenticated_session() {
-    let (fake, config, _dir, _output, _) = setup(false).await;
+    let (fake, config, _output, _) = setup(false).await;
     fake.state.pause_enable_reply();
     let stop = CancellationToken::new();
     let task = tokio::spawn(app::run(config, stop.clone()));
@@ -387,7 +381,7 @@ async fn wait_health(
 
 #[tokio::test]
 async fn real_malformed_status_is_exported_and_health_stays_ready() {
-    let (fake, config, _dir, output, port) = setup(false).await;
+    let (fake, config, output, port) = setup(false).await;
     let raw =
         include_str!("fixtures/miniserver_real/malformed_unescaped_quotes_in_output_value.raw")
             .replace(
@@ -420,7 +414,7 @@ async fn real_malformed_status_is_exported_and_health_stays_ready() {
 
 #[tokio::test]
 async fn unreadable_one_of_two_controls_degrades_without_stale_heartbeat_and_recovers() {
-    let (fake, mut config, _dir, output, port) = setup_extra(false, true).await;
+    let (fake, mut config, output, port) = setup_extra(false, true).await;
     config.processing.heartbeat_interval = 1;
     let stop = CancellationToken::new();
     let task = tokio::spawn(app::run(config, stop.clone()));
