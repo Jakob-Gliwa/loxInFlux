@@ -2,7 +2,7 @@ use crate::{
     config::Config,
     controls::Controls,
     metrics::{self, Metrics},
-    miniserver::Loader,
+    miniserver::{self, Loader},
     pacer::Pacer,
     pipeline::{Batch, Engine, Input},
     writer::Writer,
@@ -201,9 +201,11 @@ async fn run_bridge(config: Config, metrics: Arc<Metrics>, stop: CancellationTok
     };
     let producers = CancellationToken::new();
     let mut tasks = JoinSet::new();
+    let pacer = Arc::new(Pacer::new(config.general.grabber_rate_limit));
     if config.general.grabber {
         tasks.spawn(poll_loop(
             client.clone(),
+            pacer.clone(),
             controls.clone(),
             tx.clone(),
             config.clone(),
@@ -213,6 +215,8 @@ async fn run_bridge(config: Config, metrics: Arc<Metrics>, stop: CancellationTok
     }
     tasks.spawn(refresh_loop(
         loader,
+        client.clone(),
+        pacer,
         controls,
         tx.clone(),
         event_rx,
@@ -300,8 +304,11 @@ fn record_controls(c: &Controls, m: &Metrics) {
         "Loaded control routes"
     );
 }
+#[allow(clippy::too_many_arguments)]
 async fn refresh_loop(
     mut loader: Loader,
+    client: Arc<Client>,
+    pacer: Arc<Pacer>,
     controls: Arc<ArcSwap<Controls>>,
     tx: mpsc::Sender<Input>,
     mut events: watch::Receiver<u64>,
@@ -314,7 +321,12 @@ async fn refresh_loop(
     timer.tick().await;
     loop {
         tokio::select! {_=stop.cancelled()=>return Ok(()),_=timer.tick(),if seconds>0=>{},r=events.changed()=>{r?;}}
-        let result = tokio::select! {_=stop.cancelled()=>return Ok(()),r=loader.load()=>r};
+        // A command sent without a session would only wait for its timeout;
+        // the reconnect that restores the session triggers a check anyway.
+        if !client.live() {
+            continue;
+        }
+        let result = tokio::select! {_=stop.cancelled()=>return Ok(()),r=refresh(&mut loader,&client,&pacer)=>r};
         match result {
             Ok(Some(new)) => {
                 let new = Arc::new(new);
@@ -330,9 +342,25 @@ async fn refresh_loop(
         }
     }
 }
+/// Asks over the encrypted WebSocket session, so periodic checks send no HTTP
+/// credentials. HTTP is used only when the version changed or is unknown.
+async fn refresh(loader: &mut Loader, client: &Client, pacer: &Pacer) -> Result<Option<Controls>> {
+    let version = checked_command(client, pacer, miniserver::VERSION_COMMAND)
+        .await
+        .and_then(|response| miniserver::version_response(&response));
+    let version = match version {
+        Ok(version) => Some(version),
+        Err(error) => {
+            tracing::warn!(%error, "WebSocket version check failed; reloading the configuration over HTTP");
+            None
+        }
+    };
+    loader.load_version(version).await
+}
 
 async fn poll_loop(
     client: Arc<Client>,
+    pacer: Arc<Pacer>,
     controls: Arc<ArcSwap<Controls>>,
     tx: mpsc::Sender<Input>,
     config: Config,
@@ -340,7 +368,6 @@ async fn poll_loop(
     stop: CancellationToken,
 ) -> Result<()> {
     let secured = Arc::new(Mutex::new(()));
-    let pacer = Pacer::new(config.general.grabber_rate_limit);
     loop {
         if client.live() {
             let current = controls.load_full();

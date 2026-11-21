@@ -75,7 +75,7 @@ must not be mistaken for changes already present in the old release.
 | XML duplicate attributes/BOM/recovery | Streaming parser, first duplicate wins, recover parsed prefix |
 | ZIP and bare LoxCC | Magic-based detection, LZ4 block/frame, CRC and size validation |
 | LoxAPP3 JSON | ZIP member or separate `/data/LoxAPP3.json` download |
-| Config cache and reconnect refresh | No disk cache; in-memory version check plus periodic refresh |
+| Config cache and reconnect refresh | No disk cache; periodic and reconnect version checks over the encrypted WebSocket, HTTP download only when the version changed |
 | UDP/TCP/MQTT/execd | All supported; batching, framed writes and bounded retries |
 | Rounding | Same setting; optional decimal rounding, never integer truncation |
 | Graceful shutdown | Stop producers, close WebSocket, drain output with deadline |

@@ -229,6 +229,40 @@ async fn restart_downloads_the_configuration_again() {
 }
 
 #[tokio::test]
+async fn periodic_version_checks_use_the_websocket_and_skip_loxapp3() {
+    let (fake, config, output, _) = setup(false).await;
+    let stop = CancellationToken::new();
+    let task = tokio::spawn(app::run(config, stop.clone()));
+    receive_until(&output, "Default=9.4").await;
+    timeout(Duration::from_secs(10), async {
+        while fake
+            .state
+            .commands()
+            .iter()
+            .filter(|c| c.cmd == "jdev/sps/LoxAPPversion3")
+            .count()
+            < 2
+        {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    })
+    .await
+    .expect("periodic WebSocket version checks");
+    stop.cancel();
+    timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    let gets = fake.state.http_gets();
+    let count = |path: &str| gets.iter().filter(|p| p.as_str() == path).count();
+    // Only the startup check and download use HTTP credentials.
+    assert_eq!(count("jdev/sps/LoxAPPversion3"), 1);
+    assert_eq!(count("dev/fslist/prog/"), 1);
+    assert_eq!(count("data/LoxAPP3.json"), 0);
+}
+
+#[tokio::test]
 async fn failed_poll_stops_its_heartbeat_while_websocket_values_remain_live() {
     let (fake, mut config, output, port) = setup(false).await;
     config.processing.heartbeat_interval = 1;

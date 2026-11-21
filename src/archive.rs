@@ -6,7 +6,8 @@ use std::io::{Cursor, Read};
 pub const MAX_CONFIG_BYTES: usize = 64 * 1024 * 1024;
 const MAGIC: u32 = 0xaabbccee;
 
-pub fn decode(raw: &[u8]) -> Result<(Vec<u8>, Option<serde_json::Value>)> {
+/// Returns the program XML and, for deployment ZIPs, the raw LoxAPP3.json.
+pub fn decode(raw: &[u8]) -> Result<(Vec<u8>, Option<Vec<u8>>)> {
     ensure!(
         raw.len() <= MAX_CONFIG_BYTES,
         "Configuration download exceeds size limit"
@@ -15,7 +16,7 @@ pub fn decode(raw: &[u8]) -> Result<(Vec<u8>, Option<serde_json::Value>)> {
         let mut zip = zip::ZipArchive::new(Cursor::new(raw)).context("Invalid deployment ZIP")?;
         let xml = container(&entry(&mut zip, "sps0.LoxCC")?)?;
         let json = match zip.by_name("LoxAPP3.json") {
-            Ok(file) => Some(serde_json::from_slice(&bounded_read(file)?)?),
+            Ok(file) => Some(bounded_read(file)?),
             Err(zip::result::ZipError::FileNotFound) => None,
             Err(e) => return Err(e.into()),
         };
@@ -116,7 +117,7 @@ pub(crate) mod tests {
             .unwrap();
         let (xml, json) = decode(&zip.finish().unwrap().into_inner()).unwrap();
         assert_eq!(xml, b"<Root/>");
-        assert!(json.unwrap().get("lastModified").is_some());
+        assert_eq!(json.unwrap(), br#"{"lastModified":"2026-10-30 12:00:00"}"#);
     }
     #[test]
     fn corrupt_truncated_and_oversized_containers_fail() {

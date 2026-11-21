@@ -24,6 +24,29 @@ pub fn newest_file(listing: &str) -> Option<&str> {
         .max_by_key(|(_, key)| *key)
         .map(|(name, _)| name)
 }
+/// Answered with the date the structure file was last modified. That value is
+/// also LoxAPP3.json's `lastModified`, so either identifies the loaded version.
+pub const VERSION_COMMAND: &str = "jdev/sps/LoxAPPversion3";
+pub fn version_response(data: &[u8]) -> Result<String> {
+    let json: serde_json::Value = serde_json::from_slice(data)?;
+    let ll = json.get("LL").context("Missing LL version response")?;
+    check_status(ll)?;
+    ll["value"]
+        .as_str()
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .context("Missing configuration version")
+}
+fn app_version(json: &[u8]) -> Result<String> {
+    #[derive(serde::Deserialize)]
+    struct App {
+        #[serde(rename = "lastModified")]
+        last_modified: String,
+    }
+    serde_json::from_slice::<App>(json)
+        .map(|app| app.last_modified)
+        .context("LoxAPP3.json lacks lastModified; check access rights")
+}
 pub struct Loader {
     client: reqwest::Client,
     config: Config,
@@ -70,21 +93,19 @@ impl Loader {
         check_response(&data).with_context(|| format!("Miniserver HTTP /{path}"))?;
         Ok(data)
     }
-    async fn remote_version(&self) -> Result<String> {
-        let data = self.get("jdev/sps/LoxAPPversion3").await?;
-        let json: serde_json::Value = serde_json::from_slice(&data)?;
-        let ll = json.get("LL").context("Missing LL version response")?;
-        check_status(ll)?;
-        ll["value"]
-            .as_str()
-            .filter(|s| !s.is_empty())
-            .map(str::to_owned)
-            .context("Missing configuration version")
-    }
-    /// The configuration is kept in memory only: it contains the complete
-    /// Miniserver program, including users and credentials.
+    /// Startup path: no WebSocket session exists yet, so the version check
+    /// goes over HTTP.
     pub async fn load(&mut self) -> Result<Option<Controls>> {
-        let remote = self.remote_version().await.ok();
+        let remote = self.get(VERSION_COMMAND).await;
+        self.load_version(remote.and_then(|data| version_response(&data)).ok())
+            .await
+    }
+    /// Downloads and parses the configuration unless `remote`, the
+    /// Miniserver's current configuration version, is already loaded. An
+    /// unknown version always reloads. The configuration is kept in memory
+    /// only: it contains the complete Miniserver program, including users and
+    /// credentials.
+    pub async fn load_version(&mut self, remote: Option<String>) -> Result<Option<Controls>> {
         if remote.is_some() && remote == self.version {
             return Ok(None);
         }
@@ -93,14 +114,13 @@ impl Loader {
             .context("No sps configuration in /prog; check full-access permissions")?;
         let raw = self.get(&format!("dev/fsget/prog/{filename}")).await?;
         let (xml, app) = tokio::task::spawn_blocking(move || archive::decode(&raw)).await??;
-        let app = match app {
-            Some(app) => app,
-            None => serde_json::from_slice(&self.get("data/LoxAPP3.json").await?)?,
+        let version = match remote {
+            Some(version) => version,
+            None => app_version(&match app {
+                Some(app) => app,
+                None => self.get("data/LoxAPP3.json").await?,
+            })?,
         };
-        let version = app["lastModified"]
-            .as_str()
-            .context("LoxAPP3.json lacks lastModified; check access rights")?
-            .to_owned();
         let config = self.config.clone();
         let controls =
             tokio::task::spawn_blocking(move || controls::parse(&xml, &config)).await??;
@@ -178,6 +198,22 @@ mod tests {
             Some("sps_2_101.zip")
         );
         assert_eq!(newest_file("LL:403"), None);
+    }
+    #[test]
+    fn versions_come_from_the_ll_value_or_last_modified() {
+        let ok = br#"{"LL":{"control":"dev/sps/LoxAPPversion3","value":"2026-01-04 12:14:55","Code":"200"}}"#;
+        assert_eq!(version_response(ok).unwrap(), "2026-01-04 12:14:55");
+        for bad in [
+            br#"{"LL":{"value":"2026-01-04 12:14:55","Code":"403"}}"#.as_slice(),
+            br#"{"LL":{"value":"","Code":"200"}}"#,
+            br#"{"value":"x"}"#,
+        ] {
+            assert!(version_response(bad).is_err());
+        }
+        let app = br#"{"lastModified":"2026-01-04 12:14:55","msInfo":{},"controls":{"a":[1,2]}}"#;
+        assert_eq!(app_version(app).unwrap(), "2026-01-04 12:14:55");
+        assert!(app_version(br#"{"controls":{}}"#).is_err());
+        assert!(app_version(br#"{"lastModified":1}"#).is_err());
     }
     #[test]
     fn http_200_does_not_hide_ll_errors() {

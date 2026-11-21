@@ -107,7 +107,12 @@ docker run -d \
 
 The `-p 9108:9108` mapping is only needed if something outside the container
 (Prometheus, Uptime Kuma) should reach the health and metrics endpoint. The
-configuration HTTP endpoints require a Miniserver user with full access.
+configuration HTTP endpoints require a Miniserver user with full access. Those
+HTTP requests carry the credentials as Basic auth, unencrypted on port 80, so
+they are limited to startup, actual configuration changes and a failed version
+check. The periodic
+check (`general.config_refresh_interval`) asks for the version over the
+encrypted WebSocket session instead.
 
 ### Image tags
 

@@ -180,6 +180,32 @@ async fn redirects_preserve_same_origin_auth_and_load_firmware17_once_per_versio
 }
 
 #[tokio::test]
+async fn known_version_skips_loxapp3_for_a_bare_loxcc() {
+    let server = serve(routes()).await;
+    let mut loader = Loader::new(&config(&server)).unwrap();
+    assert_eq!(loader.load().await.unwrap().unwrap().grabber.len(), 1);
+    let checked = Some("2026-07-27 22:37:21".to_owned());
+    assert!(loader.load_version(checked).await.unwrap().is_none());
+    let requests = server.requests.lock().unwrap();
+    assert!(requests.iter().all(|(path, _)| path != APP));
+    assert_eq!(requests.len(), 3);
+}
+
+#[tokio::test]
+async fn failed_version_check_takes_the_version_from_loxapp3() {
+    let mut files = routes();
+    files.remove(VERSION);
+    let server = serve(files).await;
+    let mut loader = Loader::new(&config(&server)).unwrap();
+    assert_eq!(loader.load().await.unwrap().unwrap().grabber.len(), 1);
+    let checked = Some("2026-07-27 22:37:21".to_owned());
+    assert!(loader.load_version(checked).await.unwrap().is_none());
+    let requests = server.requests.lock().unwrap();
+    assert_eq!(requests.iter().filter(|(path, _)| path == APP).count(), 1);
+    assert_eq!(requests.iter().filter(|(path, _)| path == LIST).count(), 1);
+}
+
+#[tokio::test]
 async fn filesystem_and_app_http200_ll_errors_report_status_and_endpoint() {
     for endpoint in [LIST, FILE, APP] {
         for body in [
@@ -189,6 +215,10 @@ async fn filesystem_and_app_http200_ll_errors_report_status_and_endpoint() {
         ] {
             let mut files = routes();
             files.insert(endpoint.into(), Reply::Body(body.to_vec()));
+            if endpoint == APP {
+                // LoxAPP3.json is only fetched when the version is unknown.
+                files.remove(VERSION);
+            }
             let server = serve(files).await;
             let mut loader = Loader::new(&config(&server)).unwrap();
             let error = format!("{:#}", loader.load().await.unwrap_err());

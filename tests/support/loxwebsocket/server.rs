@@ -608,6 +608,14 @@ impl Session {
         if cmd == "jdev/sps/enablebinstatusupdate" {
             return (json_string("1"), "200".into());
         }
+        // Bridge-test extension: answer the version check with the value the
+        // HTTP endpoint serves.
+        if let Some(body) = cfg.files.get(cmd)
+            && let Ok(json) = serde_json::from_slice::<serde_json::Value>(body)
+            && let Some(value) = json["LL"]["value"].as_str()
+        {
+            return (json_string(value), "200".into());
+        }
 
         // Everything else echoes the command back as its value, which is what
         // the correlation tests key on to tell answers apart.
