@@ -1,0 +1,6 @@
+queue count=1 frames=false: median_us=0.160 min_us=0.139 max_us=0.178 allocations=0 allocated_bytes=0
+queue count=1 frames=true: median_us=0.081 min_us=0.079 max_us=0.086 allocations=1 allocated_bytes=24
+queue count=16 frames=false: median_us=0.936 min_us=0.929 max_us=0.946 allocations=0 allocated_bytes=0
+queue count=16 frames=true: median_us=0.662 min_us=0.658 max_us=0.677 allocations=1 allocated_bytes=384
+queue count=256 frames=false: median_us=15.172 min_us=14.819 max_us=15.305 allocations=5 allocated_bytes=12960
+queue count=256 frames=true: median_us=9.718 min_us=9.614 max_us=9.842 allocations=1 allocated_bytes=6144

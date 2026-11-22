@@ -1,0 +1,119 @@
+[general]
+grabber = true  # Enable/disable the grabber functionality - Default true
+round_floats = true  # Optional: enable/disable float rounding - Default true
+rounding_precision = 5   # Optional: number of decimal places to round to - Default 5
+grabber_interval = 300  # Interval in which grabber grabs data from miniserver in seconds - Default 300
+
+[logging]
+level = "INFO" # TRACE, DEBUG, INFO, WARNING, ERROR, CRITICAL - Optional - if not set, defaults to INFO 
+
+[miniserver]
+host = "192.168.1.100" # IP address of the miniserver, e.g. 192.168.0.100 - no prefix or port
+port = 80 
+user = "user"
+password = "password"
+visu_password = "visupassword" # Optional: Set if you have visualization password secured controls 
+max_reconnect_attempts = 0 # Optional (Default: 0): number of retries to establish connection to miniserver if connection is lost. Not set / set to 0 will result in unlimited retries - Default 0
+
+[paths]
+data_dir = "data" # Directory for storing cached Loxone configurations - Default data
+
+[telegraf]
+host = "192.168.1.101" # IP address telegraf instance, e.g. 192.168.0.100 - no prefix or port
+port = 8086
+protocol = "udp"  # Can be "udp", "tcp", "execd" (logs to stdout), or "mqtt" - Default udp
+max_retries = 0 # Optional (Default: 0): number of retries to establish connection (only relevant for mqtt and tcp). 0 will result in unlimited retries
+
+
+[telegraf.mqtt] # Optional: only relevant if protocol is mqtt
+host = "192.168.1.102" # IP address telegraf instance, e.g. 192.168.0.100 - no prefix or port
+port = 1883 # Port of telegraf instance
+username = "mqttuser"  # Optional
+password = "mqttuserpassword"  # Optional
+topic = "loxone/metrics" # Topic to send metrics to
+client_id = "loxinflux" # Client ID for telegraf instance
+
+[filters]
+# List of control types to be ignored during processing
+type_blacklist = [
+    "2POINT", "3POINT", "AALSMARTALARM", "ACCESS", "ACTORCAPTION",
+    "ADD", "ADD4", "ALARMCHAIN", "ALARMCLOCK", "AMEMORY", "AMINMAX", 
+    "AMULTICLICK", "ANALOGCOMPARATOR", "ANALOGDIFFTRIGGER", 
+    "ANALOGINPUTCAPTION", "ANALOGMULTIPLEXER", "ANALOGMULTIPLEXER2",
+    "ANALOGOUTPUTCAPTION", "ANALOGSCALER", "ANALOGSTEPPER", 
+    "ANALOGWATCHDOG", "AND", "APP", "APPLICATION", "AUTOPILOT", 
+    "AUTOPILOTRULE", "AVERAGE", "AVERAGE4", "AVG", "BINDECODER", 
+    "CALENDAR", "CALENDARCAPTION", "CALENDARENTRY", "CALLER", 
+    "CATEGORY", "CATEGORYCAPTION", "CENTRAL", "CMDRECOGNITION",
+    "CODE1", "CODE16", "CODE4", "CODE8", "COMM1WIRE", "COMM232", 
+    "COMM485", "COMMDMX", "COMMIR", "CONNECTIONIN", "CONNECTIONOUT",
+    "CONSTANT", "CONSTANTCAPTION", "COUNTER", "DAY", "DAY2009",
+    "DAYLIGHT", "DAYLIGHT2", "DAYOFWEEK", "DAYTIMER", "DEVICEMONITOR",
+    "DIV", "DOCUMENT", "DOCUMENTATION", "DOUBLECLICK", "EDGEDETECTION",
+    "EDGEWIPINGRELAY", "EIBACTORCAPTION", "EIBLINE", "EIBPUSH",
+    "EIBSENSORCAPTION", "EIBTEXTACTOR", "EIBTEXTSENSOR", "EQUAL", 
+    "EVENINGTWILIGHT", "FAN", "FIDELIOSERVER", "FLIPFLOP", "FORMULA", 
+    "GATECONTROLLER", "GATEWAY", "GATEWAYCLIENT", "GEIGERJALOUSIE",
+    "GLOBAL", "GREATER", "GREATEREQUAL", "HOUR", "ICONCAPTIONCAT",
+    "ICONCAPTIONPLACE", "ICONCAPTIONSTATE", "ICONCAT", "ICONPLACE",
+    "ICONSTATE", "IMPULSEDAY", "IMPULSEEVENINGTWILIGHT", "IMPULSEHOUR",
+    "IMPULSEMINUTE", "IMPULSEMONTH", "IMPULSEMORNINGTWILIGHT",
+    "IMPULSESECOND", "IMPULSESUNRISE", "IMPULSESUNSET", "IMPULSEYEAR",
+    "INPUTCAPTION", "INPUTREF", "INT", "IRCONTROLLER", "JALOUSIEUPDOWN2",
+    "KEYCODE", "KRETA", "LEAF", "LESS", "LESSEQUAL", "LIGHTGROUP",
+    "LIGHTGROUPACTOR", "LIGHTSCENE", "LIGHTSCENELEARN", "LIGHTSCENERGB",
+    "LOGGER", "LOGGEROUTCAPTION", "LONGCLICK", "LOX1WIREDEVICE", 
+    "LOXAINEXT", "LOXAIR", "LOXAIRDEVICE", "LOXCAPTION", "LOXDALI", 
+    "LOXDALIDEVICE", "LOXDALIGROUPACTOR", "LOXDEVICECAPTION",
+    "LOXDEVICECAPTION2", "LOXDIGINEXT", "LOXDIMM", "LOXDMXDEVICE", 
+    "LOXINTERNORM", "LOXINTERNORMDEVICE", "LOXIRACTOR", "LOXIRRCVDEVICE", 
+    "LOXIRSENSOR", "LOXIRSNDDEVICE", "LOXKNXEXT", "LOXLIVE", "LOXMORE",
+    "LOXOCEAN", "LOXOCEANDEVICE", "LOXOUTEXT", "LOXREL", "MAILER", 
+    "MEDIA", "MEDIACLIENT", "MEDIASERVER", "MEMORYCAPTION", 
+    "MESSAGECENTER", "MINISERVERCOMM", "MINMAX", "MINUTE", "MOD", 
+    "MODBUSDEV", "MODBUSSERVER", "MODE", "MODECAPTION", "MONOFLOP", 
+    "MONTH", "MORNINGTWILIGHT", "MOTORCONTROL", "MULT", "MULTICLICK",
+    "MULTIFUNCSW", "MULTIMEDIASERVER", "MUSICZONE", "NETWORKDEVICE", 
+    "NOT", "NOTEQUAL", "NOTIFICATION", "OFFDELAY", "ONDELAY", 
+    "ONOFFDELAY", "ONPULSEDELAY", "OR", "OUTPUTCAPTION", "OUTPUTREF",
+    "OUTPUTREFLM", "OVERTEMP", "PAGE", "PI", "PID", "PLACE", 
+    "PLACECAPTION", "PLACEGROUP", "PLACEGROUPCAPTION", "POWER", 
+    "PROGRAM", "PULSEAT", "PULSEBY", "PULSEGEN", "PUSHBUTTON", 
+    "PUSHBUTTON2", "PUSHBUTTON2SEL", "PUSHBUTTONSEL", "PUSHDIMMER", 
+    "PWM", "RADIO", "RADIO2", "RAMP", "RAND", "RANDOMGEN", "RC", 
+    "RCKEY", "REFUSER", "REMOTECONTROLS", "RETONDELAY", "RSFLIPFLOP", 
+    "SAFECURRENTOUT", "SECOND", "SECONDSBOOT", "SENSORCAPTION", 
+    "SEQUENCER", "SHIFT", "SONNENBATTERYDEVICE", "SRFLIPFLOP", "STAIRWAYLS",
+    "STARTPULSE", "STEAKTHERMO", "SUB", "SUNALTITUDE", 
+    "SUNAZIMUTH", "SUNRISE", "SUNSET", "SWITCH", "SWITCH2BUTTON", 
+    "SYSVAR", "TASKCAPTION", "TASKSCHEDULER", "TEXT", "TEXTACTOR", 
+    "TIME", "TIMECAPTION", "TOILET", "TRACKER", "TREE", "TREEDEVICE", 
+    "TREETURBODEVICE", "UPDOWNCOUNTER", "USER", "USERCAPTION", 
+    "USERGROUP", "USERGROUPCAPTION", "VALVEDEVICE", "VIRTUALHTTPIN", 
+    "VIRTUALINCAPTION", "VIRTUALOUTCAPTION", "VIRTUALUDPIN", 
+    "WALLMOUNTDEVICE", "WEATHERDATA", "WEATHERSERVER", "WEBPAGE", 
+    "WIPINGRELAY", "XOR", "YEAR", "PUDE", "ICON", "RIGHTGROUP", 
+    "CALLERVIRTUALIN", "SYSTEMSCHEME", "VIRTUALOUTCMD", "APIACTOR", "PERMISSION", "DATETIME",
+    "WEEK", "NIGHTTIME", "IMPULSEEVENINGTWILIGHT", "IMPULSEMORNINGTWILIGHT", "IMPULSESUNSET", "IMPULSESUNRISE", "IMPULSESECOND", "IMPULSEMINUTE", "IMPULSEHOUR", "IMPULSEDAY", "IMPULSEMONTH", "IMPULSEYEAR", "STARTPULSE", "SUNAZIMUTH", "SUNALTITUDE", "EVENINGTWILIGHT", "MORNINGTWILIGHT", "DAYLIGHT2", "DAYLIGHT", "SUNSET", "SUNRISE", "SECONDSBOOT", "SECOND", "MINUTE", "HOUR", "TIME", "CALENDAR", "DAYOFWEEK", "DAY", "MONTH", "YEAR", "DAY2009",
+    "SWITCHINGTIMER", "GLOBALSTATES", "WEATHERCAPTION", "LANINT", "GENDEV", "CSYSM", "ANALOGTHRESHOLDTRIGGER"
+]
+
+[filters.websocket] # Optional: Filter controls for websocket protocol if a type or uuid generates too much traffic/data. It is recommended though to use telegraf processors / aggregators for filtering as it is more efficient.
+type_blacklist = [
+]
+type_whitelist = [
+]
+uuid_blacklist = [
+]
+uuid_whitelist = [
+]
+
+[filters.grabber] # Optional: Filter controls for grabber protocol if a type or uuid generates too much traffic/data. It is recommended though to use telegraf processors / aggregators for filtering as it is more efficient.
+type_blacklist = [
+]
+type_whitelist = [
+]
+uuid_blacklist = [
+]
+uuid_whitelist = [
+]

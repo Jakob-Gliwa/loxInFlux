@@ -1,0 +1,12 @@
+Input bytes=80 Route bytes=80 PollControl bytes=64 Value bytes=24
+routes=7981 grabber=838 control_retained_bytes=4654090 parse_peak_extra_bytes=6334010
+engine_extra_bytes=2684043
+field_key_allocations=23943 unique_field_key_strings=976 estimated_arc_bytes=575489 estimated_interned_arc_bytes=25176
+text callback Bytes copy alone: allocations/event=1.000
+text normalization alone: allocations/event=2.000
+numeric, dedup=false: allocations/event=0.000
+100-byte text including callback copy, dedup=false: allocations/event=3.000
+parse+process 2-field poll excluding upstream payload copy, dedup=false: allocations/event=12.000
+numeric, dedup=true: allocations/event=0.000
+100-byte text including callback copy, dedup=true: allocations/event=3.000
+parse+process 2-field poll excluding upstream payload copy, dedup=true: allocations/event=8.000

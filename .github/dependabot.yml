@@ -1,6 +1,6 @@
 version: 2
 updates:
-  - package-ecosystem: "uv"
+  - package-ecosystem: "cargo"
     directory: "/"
     schedule:
       interval: "weekly"
@@ -14,8 +14,25 @@ updates:
     commit-message:
       prefix: "deps"
       include: "scope"
-    # Optional: Group ALL dependencies together to reduce PR noise
+    # loxwebsocket is pinned exactly (=0.3.2) and is upgraded deliberately.
+    ignore:
+      - dependency-name: "loxwebsocket"
     groups:
-      python-dependencies:
+      rust-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "friday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    groups:
+      github-actions:
         patterns:
           - "*"

@@ -1,0 +1,8 @@
+[advisories]
+ignore = [
+    # Same scoped exception as loxMqttRelay 0.5.0: rsa 0.9 Marvin concerns
+    # private-key decryption. Production uses only the Miniserver's public key
+    # for encryption during key exchange. Private RSA keys occur only in the
+    # local test server. No patched rsa release exists; revisit on client updates.
+    "RUSTSEC-2023-0071",
+]

@@ -1,0 +1,45 @@
+{
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "architecture": "arm64",
+  "baseline_snapshot": "/private/tmp/loxtotelegraf-opt2-baseline",
+  "baseline_build_directory": "/private/tmp/loxtotelegraf-opt2-target",
+  "source_sha256": {
+    "before": {
+      "src/app.rs": "d8eaba7d19d51879d60cdefbbbcb6c833082427efcc7c02aa60e8281a4f637da",
+      "src/archive.rs": "bbbe5829e3d6a62642bf8c311969330f162246270ddd8a1f140e4f0f2aaa57dc",
+      "src/config.rs": "9e9caa1a8983c52e0401253ccfc08091d966ef57cc49be426f6286453736614e",
+      "src/controls.rs": "cba35fc627d0b0bbb26e78d1f6309cde8dc347c29fbae020557c5ecf6690ba7b",
+      "src/grabber.rs": "8db58be24ee0483ea8fbf3d984deee04bceb7417beec5cdbb1d6052ed77bf864",
+      "src/json_repair.rs": "2e3ef9426f04e68ca5e480b11c6822c54ce24703ebd805d942e60a855308af76",
+      "src/lib.rs": "435ccd93f1d2c98bb04a3f0fb9e9bd8f83886b033661e29e7bb79d250228c7c9",
+      "src/logging.rs": "2040ffb62c73a4293b0c82d133810cf7c262d46541df354d22ac39b9111dbfc9",
+      "src/main.rs": "cb28829497d2e48360150e13423a2a3fe6a1f59cc261fd4928fecbcfb2d861ab",
+      "src/metrics.rs": "658b9e9685339bb6e1861462809f4ecc7fc8b6f03fa560fe7b5e56677d153372",
+      "src/miniserver.rs": "dc6357e1cb20170103ecfe5c7394adace9ce44dc2c19ebbb15bba544856ab5e0",
+      "src/pipeline.rs": "85f4bdb36cf52699f959eccc113b92947be498e809aac94de60f621a5f08e4bc",
+      "src/protocol.rs": "e19db652b0784a0c77202faa33780b867a661149971b7bb8fcb5fee2ea050c13",
+      "src/stdout.rs": "55ca22245c7e6e7cabb9d66799a7599dfa319baaafa5ff01d9364ddf35112467",
+      "src/value.rs": "665dd70133ab4e406de403afb39e4fa8eca73ee5dfdb704aeb5a9f9e0ad895d3",
+      "src/writer.rs": "6cb9b0c124a185d19aa2c3f349f0e1a078fc88795a663055219c9922568f6db6"
+    },
+    "after": {
+      "src/app.rs": "deff3eafc287f18fa940adec20394d466aaa0f060872674c537829ba574f672a",
+      "src/archive.rs": "bbbe5829e3d6a62642bf8c311969330f162246270ddd8a1f140e4f0f2aaa57dc",
+      "src/config.rs": "9e9caa1a8983c52e0401253ccfc08091d966ef57cc49be426f6286453736614e",
+      "src/controls.rs": "d066f696520e39b9cb43509e8ca699ab12a1c4adb0da82b57c12579bcfeb336e",
+      "src/grabber.rs": "2db1a20e67b18ce8785d690a4c1074e8ab3745f4ac0d06ee6e39687f3f76b4ae",
+      "src/json_repair.rs": "2e3ef9426f04e68ca5e480b11c6822c54ce24703ebd805d942e60a855308af76",
+      "src/lib.rs": "435ccd93f1d2c98bb04a3f0fb9e9bd8f83886b033661e29e7bb79d250228c7c9",
+      "src/logging.rs": "2040ffb62c73a4293b0c82d133810cf7c262d46541df354d22ac39b9111dbfc9",
+      "src/main.rs": "cb28829497d2e48360150e13423a2a3fe6a1f59cc261fd4928fecbcfb2d861ab",
+      "src/metrics.rs": "658b9e9685339bb6e1861462809f4ecc7fc8b6f03fa560fe7b5e56677d153372",
+      "src/miniserver.rs": "7b872b91bef1e87e0c0949e729a9807eeac76433031b8b7fe70d30550b753075",
+      "src/pipeline.rs": "98be961904dc15c2255a3901eaf5bf9993732028751a9ee43f49b13f8e2f6d6e",
+      "src/protocol.rs": "e19db652b0784a0c77202faa33780b867a661149971b7bb8fcb5fee2ea050c13",
+      "src/stdout.rs": "55ca22245c7e6e7cabb9d66799a7599dfa319baaafa5ff01d9364ddf35112467",
+      "src/value.rs": "059876bfb6a1ca18f7346aa2277213127e9b8a8dbae9a2ffdd7c0c40a25955b8",
+      "src/writer.rs": "28861dd9a2159d3033ca919ab23ce051b11063b0ee28a81a2eb393e214cff7ed"
+    }
+  },
+  "cargo_lock_sha256": "f3ae2abec3a03f9b8d3d559d59c4b5d5752ba9e8dd21a2ba488e1dfa33a1c31c"
+}

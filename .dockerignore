@@ -1,38 +1,23 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.pytest_cache/
-.coverage
-htmlcov/
-coverage.xml
+# The build stage copies Cargo.toml, Cargo.lock, src/ and benches/ explicitly,
+# so this list is a second line of defence rather than the mechanism. It matters
+# most for `target/`, which is large and whose host artifacts are useless to a
+# musl build.
+target/
 
-# Virtual environments
-.venv/
-venv/
-ENV/
-
-# VCS / tooling
 .git/
 .gitignore
 .github/
-.vscode/
 
-# Docs / research / local data not needed in the image
-Recherche/
+# The operator's own configuration and cache. Neither belongs in an image; both
+# are mounted at runtime.
+config/
 data/
-config/config.toml
-profile_results.html
-*.log
-logs/
 
-# Build artifacts
-dist/
-build/
-*.egg-info/
+# Read by the tests and humans, not needed to build.
+tests/
+docs/
+examples/
+scripts/
 
-# Local scratch
-benchmark*.py
-newbench.py
 .DS_Store
+*.log
