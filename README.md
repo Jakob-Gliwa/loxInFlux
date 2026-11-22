@@ -44,8 +44,16 @@ to migrate, pin `acidcliff/loxinflux:0.3` (or `:0.3.0`) in your compose file.
    0.3 already stored as integers (or strings) will reject the new float values
    with `field type conflict`, and those points are dropped. Before switching,
    either:
-   - write to a **fresh bucket** (simplest), or
-   - **migrate the existing field types** to float. BetaWayOfLife shared an
+   - **migrate your history with
+     [loxInFlux-migration-helper](https://github.com/Jakob-Gliwa/loxInFlux-migration-helper)**
+     (recommended). It copies the existing bucket into a new one with exactly
+     the conversions of 0.5 (floats, units, `__text__` fields), verifies every
+     series, catches up the last hours and swaps the bucket names, so Grafana
+     and Telegraf keep using the same bucket name. The original stays as an
+     archive bucket. Step by step:
+     [switchover guide](https://github.com/Jakob-Gliwa/loxInFlux-migration-helper/blob/main/docs/switchover.md),
+   - write to a **fresh bucket** and query the old one for history, or
+   - **migrate the existing field types** in place. BetaWayOfLife shared an
      in-place, month-by-month
      [migration script for InfluxDB v2](https://gist.github.com/BetaWayOfLife/69eefad3cf5a0e97bc3251c03fc6d898)
      in PR #6. Back up first and stop loxInFlux while it runs.
@@ -419,6 +427,10 @@ connect to real hardware or databases.
 ## Further documentation
 
 - [Migration and source audit](docs/migration.md), including the upgrade from 0.3
+- [loxInFlux-migration-helper](https://github.com/Jakob-Gliwa/loxInFlux-migration-helper):
+  moves the 0.3 history into the 0.5 schema, with a
+  [switchover guide](https://github.com/Jakob-Gliwa/loxInFlux-migration-helper/blob/main/docs/switchover.md)
+- [Changelog](CHANGELOG.md)
 - [Commit and PR regression audit](docs/history-audit.md) of the Python history
 - [Relay audit](docs/relay-audit.md): fixes carried over from loxMqttRelay's Rust port
 - [Final cross-repository audit](docs/final-audit.md)

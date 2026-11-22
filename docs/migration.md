@@ -21,8 +21,17 @@ breaking changes is in the [README](../README.md#breaking-changes-in-050).
 4. **Decide what happens to the history.** Every numeric field is a float from
    0.5 on. Fields that 0.3 stored as integers or strings in the same bucket
    reject the new points with `field type conflict`. Either
+   - migrate the history into a new bucket with
+     [loxInFlux-migration-helper](https://github.com/Jakob-Gliwa/loxInFlux-migration-helper)
+     (recommended). It applies the same conversions as 0.5, verifies the copy
+     series by series, catches up the time since the copy and renames the
+     buckets, so consumers keep their bucket name; tokens bound to the old
+     bucket need replacing. Its
+     [switchover guide](https://github.com/Jakob-Gliwa/loxInFlux-migration-helper/blob/main/docs/switchover.md)
+     covers this step and step 5. It can also copy values that InfluxDB still
+     holds on disk but no query returns (`recover`), or
    - switch production to a fresh bucket and query the old one for history, or
-   - convert the old field types to float before switching. The
+   - convert the old field types to float in place before switching. The
      [InfluxDB v2 migration script](https://gist.github.com/BetaWayOfLife/69eefad3cf5a0e97bc3251c03fc6d898)
      from [PR #6](https://github.com/Jakob-Gliwa/loxInFlux/pull/6) reads,
      coerces, deletes and rewrites one month at a time, and defaults to a dry
